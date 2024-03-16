@@ -1,5 +1,5 @@
 mod texture;
-use cgmath::prelude::*;
+use cgmath::{num_traits::float, prelude::*};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -165,7 +165,6 @@ struct CameraUniform {
 
 impl CameraUniform {
     fn new() -> Self {
-        use cgmath::SquareMatrix;
         Self {
             view_proj: cgmath::Matrix4::identity().into(),
         }
@@ -234,7 +233,6 @@ impl CameraController {
     }
 
     fn update_camera(&self, camera: &mut Camera) {
-        use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
@@ -286,6 +284,7 @@ struct State<'w> {
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+    frame: u32,
 }
 impl<'w> State<'w> {
     // Creating some of the wgpu types requires async code
@@ -515,7 +514,7 @@ impl<'w> State<'w> {
                             cgmath::Deg(0.0),
                         )
                     } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(0.0))
                     };
 
                     Instance { position, rotation }
@@ -529,7 +528,7 @@ impl<'w> State<'w> {
             contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
-
+        let frame = 0;
         Self {
             surface,
             device,
@@ -550,6 +549,7 @@ impl<'w> State<'w> {
             camera_bind_group,
             instances,
             instance_buffer,
+            frame,
         }
     }
 
@@ -587,6 +587,7 @@ impl<'w> State<'w> {
     }
 
     fn update(&mut self) {
+        let frame = self.frame;
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(
@@ -594,6 +595,59 @@ impl<'w> State<'w> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+        const NUM_INSTANCES_PER_ROW: u32 = 10;
+        const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+            NUM_INSTANCES_PER_ROW as f32 * 0.5,
+            0.0,
+            NUM_INSTANCES_PER_ROW as f32 * 0.5,
+        );
+        // frames per degree
+        let rotation_speed = 2.0;
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: x as f32,
+                        y: 0.0,
+                        z: z as f32,
+                    } - INSTANCE_DISPLACEMENT;
+
+                    let rotation = if position.is_zero() {
+                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                        // as Quaternions can affect scale if they're not created correctly
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        // cgmath::Quaternion::from_axis_angle(
+                        //     position.normalize(),
+                        //     cgmath::Deg((frame as f32) / rotation_speed),
+                        // )
+                        cgmath::Quaternion::from_angle_y(cgmath::Deg(
+                            (frame as f32) / rotation_speed,
+                        ))
+                    };
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+        self.instances = instances;
+
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+        self.instance_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        self.frame += 1;
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
