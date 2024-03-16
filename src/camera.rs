@@ -44,6 +44,16 @@ impl Camera {
             Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
             Vector3::unit_y(),
         )
+        // Matrix4::from_translation(Vector3::new(
+        //     self.position.x,
+        //     self.position.y,
+        //     self.position.z,
+        // )) * Matrix4::look_to_rh(
+        //     self.position,
+        //     Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
+        //     Vector3::unit_y(),
+        // )
+        // cgmath::Matrix4::look_at_rh(self.position, Point3::new(0.0, 0.0, 0.0), Vector3::unit_y())
     }
 }
 
