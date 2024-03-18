@@ -2,6 +2,8 @@ mod camera;
 mod model;
 mod resources;
 mod texture;
+mod world;
+mod block;
 use camera::{Camera, CameraController, Projection};
 use cgmath::{num_traits::float, prelude::*};
 use model::{Model, Vertex};
@@ -16,6 +18,8 @@ use winit::{
     window::Window,
     window::WindowBuilder,
 };
+
+use crate::world::World;
 
 // impl Vertex {
 //     // 0 is position
@@ -43,7 +47,8 @@ impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation))
+                * cgmath::Matrix4::from(self.rotation) 
+                * cgmath::Matrix4::from_scale(0.5))// note: this was just for scaling the cube
             .into(),
         }
     }
@@ -268,7 +273,7 @@ impl<'w> State<'w> {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let camera = camera::Camera::new((0.0, 1.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
+        let camera = camera::Camera::new((0.0, 80.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
@@ -359,27 +364,57 @@ impl<'w> State<'w> {
 
         const NUM_INSTANCES_PER_ROW: u32 = 10;
         const SPACE_BETWEEN: f32 = 3.0;
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        let world = World::new(1);
 
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
+        // let blocks = world.chunks.into_iter()
+        // .flat_map(|chunk| {
+        //     chunk.blocks.map()
+        // });
+        let mut block_instances: Vec<Instance> = Vec::new();
 
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
+        for chunk in world.chunks {
+            let blocks = chunk.blocks;
+            for x in 0..blocks.len() {
+                for y in 0..blocks[0].len() {
+                    for z in 0..blocks[0][0].len() {
+                        use block::Block::*;
+                        match blocks[x][y][z] {
+                            Grass => {
+                                let position = cgmath::Vector3 {x: x as f32, y: y as f32, z: z as f32};
+                                let rotation =                         cgmath::Quaternion::from_axis_angle(
+                                    cgmath::Vector3::unit_z(),
+                                    cgmath::Deg(0.0),
+                                );
+                                block_instances.push(Instance{position, rotation});
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        let instances = block_instances;
+        // let instances = (0..NUM_INSTANCES_PER_ROW)
+        //     .flat_map(|z| {
+        //         (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+        //             let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        //             let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
+        //             let position = cgmath::Vector3 { x, y: 0.0, z };
+
+        //             let rotation = if position.is_zero() {
+        //                 cgmath::Quaternion::from_axis_angle(
+        //                     cgmath::Vector3::unit_z(),
+        //                     cgmath::Deg(0.0),
+        //                 )
+        //             } else {
+        //                 cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+        //             };
+
+        //             Instance { position, rotation }
+        //         })
+        //     })
+        //     .collect::<Vec<_>>();
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -395,6 +430,7 @@ impl<'w> State<'w> {
             resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
                 .await
                 .unwrap();
+        
 
         Self {
             surface,
