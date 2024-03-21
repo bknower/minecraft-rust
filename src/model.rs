@@ -11,6 +11,10 @@ pub struct Model {
     pub materials: Vec<Material>,
 }
 
+impl Model {
+    pub fn cube() {}
+}
+
 pub struct Material {
     pub name: String,
     pub diffuse_texture: Texture,
