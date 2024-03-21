@@ -592,7 +592,6 @@ impl<'w> State<'w> {
             // render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
             use model::DrawModel;
-			println!("about to draw");
             render_pass.draw_model_instanced(
                 &self.obj_model,
                 0..self.instances.len() as u32,

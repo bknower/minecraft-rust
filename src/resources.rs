@@ -144,11 +144,6 @@ pub async fn load_model(
                 contents: bytemuck::cast_slice(&m.mesh.indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
-			m.mesh.indices.iter().for_each(
-				|index| {
-					println!("{}", index);
-				}
-			);
 			
 
             model::Mesh {

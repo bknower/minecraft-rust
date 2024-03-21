@@ -117,7 +117,6 @@ where
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, camera_bind_group, &[]);
-		println!("num elements {}", mesh.num_elements);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
     fn draw_model(&mut self, model: &'b Model, camera_bind_group: &'b wgpu::BindGroup) {
