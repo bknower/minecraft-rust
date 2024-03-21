@@ -17,7 +17,7 @@ impl Chunk {
                     (x as f64 + 16.0 * chunk_x as f64) / 16.0,
                     (z as f64 + 16.0 * chunk_z as f64) / 16.0,
                 ]);
-                println!("{}, {}, {}", height_noise, x, z);
+                // println!("{}, {}, {}", height_noise, x, z);
                 let height = (sea_level + height_noise * height_variability) as usize;
                 for y in 0usize..256 {
                     if y < height {

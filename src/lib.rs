@@ -21,23 +21,6 @@ use winit::{
 
 use crate::world::World;
 
-// impl Vertex {
-//     // 0 is position
-//     // 1 is color
-//     const ATTRIBS: [wgpu::VertexAttribute; 2] =
-//         wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2];
-
-//     fn desc() -> wgpu::VertexBufferLayout<'static> {
-//         use std::mem;
-
-//         wgpu::VertexBufferLayout {
-//             array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
-//             step_mode: wgpu::VertexStepMode::Vertex,
-//             attributes: &Self::ATTRIBS,
-//         }
-//     }
-// }
-
 struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
@@ -426,10 +409,14 @@ impl<'w> State<'w> {
 
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
-        let obj_model =
-            resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
-                .await
-                .unwrap();
+        // let obj_model =
+        //     resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+        //         .await
+        //         .unwrap();
+		let obj_model =
+		resources::load_block("stone", 
+		vec!["stone.png"], &device, &queue, &texture_bind_group_layout)
+			.await;
         
 
         Self {
@@ -605,11 +592,13 @@ impl<'w> State<'w> {
             // render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
             use model::DrawModel;
+			println!("about to draw");
             render_pass.draw_model_instanced(
                 &self.obj_model,
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
             );
+			// render_pass.
         }
 
         // submit will accept anything that implements IntoIter

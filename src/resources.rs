@@ -3,7 +3,7 @@ use std::io::{BufReader, Cursor};
 use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
 
-use crate::{model, texture};
+use crate::{model::{self, ModelVertex}, texture};
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {
@@ -144,6 +144,12 @@ pub async fn load_model(
                 contents: bytemuck::cast_slice(&m.mesh.indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
+			m.mesh.indices.iter().for_each(
+				|index| {
+					println!("{}", index);
+				}
+			);
+			
 
             model::Mesh {
                 name: file_name.to_string(),
@@ -156,4 +162,90 @@ pub async fn load_model(
         .collect::<Vec<_>>();
 
     Ok(model::Model { meshes, materials })
+}
+
+pub async fn load_block(
+	block_name: &str,
+    face_textures: Vec<&str>,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+) -> model::Model {
+	let mut materials = Vec::new();
+	for t in face_textures {
+        let diffuse_texture = load_texture(t, device, queue).await.unwrap();
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                },
+            ],
+            label: None,
+        });
+
+        materials.push(model::Material {
+            name: t.to_string(),
+            diffuse_texture,
+            bind_group,
+        })
+    }
+
+	let normal: [f32; 3] = [0.0, 0.0, 0.0];
+	let vertices: Vec<ModelVertex> = vec![
+		// front face
+		ModelVertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0], normal},
+		ModelVertex { position: [0.0, 0.0, 1.0], tex_coords: [1.0, 0.0], normal},
+		ModelVertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 1.0], normal},
+		ModelVertex { position: [0.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal},
+
+		// back face
+		ModelVertex { position: [1.0, 0.0, 0.0], tex_coords: [1.0, 0.0], normal},
+		ModelVertex { position: [1.0, 0.0, 1.0], tex_coords: [0.0, 0.0], normal},
+		ModelVertex { position: [1.0, 1.0, 0.0], tex_coords: [1.0, 1.0], normal},
+		ModelVertex { position: [1.0, 1.0, 1.0], tex_coords: [0.0, 1.0], normal},
+
+		// ModelVertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0], normal},
+		// ModelVertex { position: [0.0, 0.0, 1.0], tex_coords: [1.0, 0.0], normal},
+		// ModelVertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 1.0], normal},
+		// ModelVertex { position: [0.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal},
+
+	];
+	
+	let indices: &[u32] = &[
+		// front
+		0, 1, 2,
+		2, 1, 3,
+
+		// back
+		5, 4, 7,
+		7, 4, 6
+		// 5, 4, 6, 7,
+
+	];
+
+	let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+		label: Some(&format!("{:?} Vertex Buffer", block_name)),
+		contents: bytemuck::cast_slice(&vertices),
+		usage: wgpu::BufferUsages::VERTEX,
+	});
+	let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+		label: Some(&format!("{:?} Index Buffer", block_name)),
+		contents: bytemuck::cast_slice(indices),
+		usage: wgpu::BufferUsages::INDEX,
+	});
+
+	let mesh = model::Mesh {
+		name: block_name.to_string(),
+		vertex_buffer,
+		index_buffer,
+		num_elements: indices.len() as u32,
+		material: 0,
+	};
+	model::Model {meshes: vec![mesh], materials}
 }
