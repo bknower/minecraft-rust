@@ -192,23 +192,50 @@ pub async fn load_block(
     }
 
 	let normal: [f32; 3] = [0.0, 0.0, 0.0];
+	const V0: [f32; 3] = [0.0, 0.0, 0.0];
+	const V1: [f32; 3] = [0.0, 0.0, 1.0];
+	const V2: [f32; 3] = [0.0, 1.0, 0.0];
+	const V3: [f32; 3] = [0.0, 1.0, 1.0];
+	const V4: [f32; 3] = [1.0, 0.0, 0.0];
+	const V5: [f32; 3] = [1.0, 0.0, 1.0];
+	const V6: [f32; 3] = [1.0, 1.0, 0.0];
+	const V7: [f32; 3] = [1.0, 1.0, 1.0];
 	let vertices: Vec<ModelVertex> = vec![
 		// front face
-		ModelVertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0], normal},
-		ModelVertex { position: [0.0, 0.0, 1.0], tex_coords: [1.0, 0.0], normal},
-		ModelVertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 1.0], normal},
-		ModelVertex { position: [0.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal},
+		ModelVertex { position: V0, tex_coords: [0.0, 0.0], normal},
+		ModelVertex { position: V1, tex_coords: [1.0, 0.0], normal},
+		ModelVertex { position: V2, tex_coords: [0.0, 1.0], normal},
+		ModelVertex { position: V3, tex_coords: [1.0, 1.0], normal},
 
 		// back face
-		ModelVertex { position: [1.0, 0.0, 0.0], tex_coords: [1.0, 0.0], normal},
-		ModelVertex { position: [1.0, 0.0, 1.0], tex_coords: [0.0, 0.0], normal},
-		ModelVertex { position: [1.0, 1.0, 0.0], tex_coords: [1.0, 1.0], normal},
-		ModelVertex { position: [1.0, 1.0, 1.0], tex_coords: [0.0, 1.0], normal},
+		ModelVertex { position: V4, tex_coords: [1.0, 0.0], normal},
+		ModelVertex { position: V5, tex_coords: [0.0, 0.0], normal},
+		ModelVertex { position: V6, tex_coords: [1.0, 1.0], normal},
+		ModelVertex { position: V7, tex_coords: [0.0, 1.0], normal},
 
-		// ModelVertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0], normal},
-		// ModelVertex { position: [0.0, 0.0, 1.0], tex_coords: [1.0, 0.0], normal},
-		// ModelVertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 1.0], normal},
-		// ModelVertex { position: [0.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal},
+		// left face
+		ModelVertex { position: V0, tex_coords: [1.0, 0.0], normal}, // 0 8
+		ModelVertex { position: V2, tex_coords: [1.0, 1.0], normal}, // 2 9
+		ModelVertex { position: V4, tex_coords: [0.0, 0.0], normal}, // 4 10
+		ModelVertex { position: V6, tex_coords: [0.0, 1.0], normal}, // 6 11
+
+		// right face
+		ModelVertex { position: V1, tex_coords: [0.0, 0.0], normal}, // 12
+		ModelVertex { position: V3, tex_coords: [0.0, 1.0], normal}, // 13
+		ModelVertex { position: V5, tex_coords: [1.0, 0.0], normal}, // 14
+		ModelVertex { position: V7, tex_coords: [1.0, 1.0], normal}, // 15
+
+		// up face
+		ModelVertex { position: V2, tex_coords: [0.0, 0.0], normal}, // 16
+		ModelVertex { position: V3, tex_coords: [0.0, 1.0], normal}, // 17
+		ModelVertex { position: V6, tex_coords: [1.0, 0.0], normal}, // 18
+		ModelVertex { position: V7, tex_coords: [1.0, 1.0], normal}, // 19
+
+		// down face
+		ModelVertex { position: V0, tex_coords: [0.0, 1.0], normal}, // 20
+		ModelVertex { position: V1, tex_coords: [1.0, 1.0], normal}, // 21
+		ModelVertex { position: V4, tex_coords: [0.0, 0.0], normal}, // 22
+		ModelVertex { position: V5, tex_coords: [1.0, 0.0], normal}, // 23
 
 	];
 	
@@ -219,8 +246,23 @@ pub async fn load_block(
 
 		// back
 		5, 4, 7,
-		7, 4, 6
-		// 5, 4, 6, 7,
+		7, 4, 6,
+
+		// left
+		8, 9, 10,
+		10, 9, 11,
+
+		// right
+		12, 14, 13,
+		13, 14, 15,
+
+		// up
+		16, 17, 18,
+		18, 17, 19,
+
+		// down
+		20, 22, 21,
+		21, 22, 23,
 
 	];
 
