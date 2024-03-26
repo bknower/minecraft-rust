@@ -30,8 +30,8 @@ impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation) 
-                * cgmath::Matrix4::from_scale(0.5))// note: this was just for scaling the cube
+                * cgmath::Matrix4::from(self.rotation) )
+                // * cgmath::Matrix4::from_scale(0.5))// note: this was just for scaling the cube
             .into(),
         }
     }
@@ -157,6 +157,7 @@ struct State<'w> {
     depth_texture: Texture,
     obj_model: Model,
     mouse_pressed: bool,
+    world: World
 }
 impl<'w> State<'w> {
     // Creating some of the wgpu types requires async code
@@ -319,9 +320,9 @@ impl<'w> State<'w> {
                 })],
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, // 2.
+                front_face: wgpu::FrontFace::Ccw, 
                 cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -333,14 +334,14 @@ impl<'w> State<'w> {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: texture::Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less, // 1.
-                stencil: wgpu::StencilState::default(),     // 2.
+                depth_compare: wgpu::CompareFunction::Less, 
+                stencil: wgpu::StencilState::default(),     
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState {
-                count: 1,                         // 2.
-                mask: !0,                         // 3.
-                alpha_to_coverage_enabled: false, // 4.
+                count: 1,                         
+                mask: !0,                         
+                alpha_to_coverage_enabled: false, 
             },
             multiview: None, // 5.
         });
@@ -355,27 +356,7 @@ impl<'w> State<'w> {
         // });
         let mut block_instances: Vec<Instance> = Vec::new();
 
-        for chunk in world.chunks {
-            let blocks = chunk.blocks;
-            for x in 0..blocks.len() {
-                for y in 0..blocks[0].len() {
-                    for z in 0..blocks[0][0].len() {
-                        use block::Block::*;
-                        match blocks[x][y][z] {
-                            Grass => {
-                                let position = cgmath::Vector3 {x: x as f32, y: y as f32, z: z as f32};
-                                let rotation =                         cgmath::Quaternion::from_axis_angle(
-                                    cgmath::Vector3::unit_z(),
-                                    cgmath::Deg(0.0),
-                                );
-                                block_instances.push(Instance{position, rotation});
-                            },
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
+
         let instances = block_instances;
         // let instances = (0..NUM_INSTANCES_PER_ROW)
         //     .flat_map(|z| {
@@ -441,6 +422,7 @@ impl<'w> State<'w> {
             depth_texture,
             obj_model,
             mouse_pressed: false,
+            world
         }
     }
 
@@ -493,6 +475,34 @@ impl<'w> State<'w> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+        self.world.update(self.camera.position);
+
+        let mut block_instances = vec![];
+
+        for chunk in self.world.chunks.as_slice() {
+            let blocks = chunk.blocks;
+            for x in 0..blocks.len() {
+                for y in 0..blocks[0].len() {
+                    for z in 0..blocks[0][0].len() {
+                        use block::Block::*;
+                        match blocks[x][y][z] {
+                            Grass => {
+                                let position = cgmath::Vector3 {
+                                    x: x as f32 + (chunk.chunk_x * world::CHUNK_SIZE_X as i32) as f32, 
+                                    y: y as f32, 
+                                    z: z as f32 + (chunk.chunk_z * world::CHUNK_SIZE_Z as i32) as f32};
+                                let rotation =                         cgmath::Quaternion::from_axis_angle(
+                                    cgmath::Vector3::unit_z(),
+                                    cgmath::Deg(0.0),
+                                );
+                                block_instances.push(Instance{position, rotation});
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
 
         // const NUM_INSTANCES_PER_ROW: u32 = 10;
         // const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
@@ -532,20 +542,20 @@ impl<'w> State<'w> {
         //         })
         //     })
         //     .collect::<Vec<_>>();
-        // self.instances = instances;
+        self.instances = block_instances;
 
-        // let instance_data = self
-        //     .instances
-        //     .iter()
-        //     .map(Instance::to_raw)
-        //     .collect::<Vec<_>>();
-        // self.instance_buffer = self
-        //     .device
-        //     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //         label: Some("Instance Buffer"),
-        //         contents: bytemuck::cast_slice(&instance_data),
-        //         usage: wgpu::BufferUsages::VERTEX,
-        //     });
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+        self.instance_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
         self.frame += 1;
     }
 
