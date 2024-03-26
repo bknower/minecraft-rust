@@ -61,7 +61,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 2;
+        let render_distance = 3;
         let chunks = vec![];
         Self {
             chunks,
@@ -77,16 +77,16 @@ impl World {
         if old_chunk_position != chunk_position || self.chunks.len() == 0 {
             self.position = position;
             println!(
-                "position: {:?}, self.position: {:?}",
-                position, self.position
+                "old_chunk_position: {:?}, chunk_position: {:?}",
+                old_chunk_position, chunk_position
             );
-            let max_distance = self.render_distance * self.render_distance;
+            let max_distance = 2 * self.render_distance * self.render_distance;
             let chunks_in_render_distance: Vec<Point2<i32>> = (-self.render_distance
-                ..self.render_distance)
+                ..=self.render_distance)
                 .flat_map(|x| {
-                    (-self.render_distance..self.render_distance).filter_map(move |z| {
+                    (-self.render_distance..=self.render_distance).filter_map(move |z| {
                         let distance = x * x + z * z;
-                        let point: Option<Point2<i32>> = match distance <= max_distance {
+                        let point: Option<Point2<i32>> = match distance < max_distance {
                             true => Some((x + chunk_position.x, z + chunk_position.y).into()),
                             false => None,
                         };

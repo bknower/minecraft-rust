@@ -257,10 +257,10 @@ impl<'w> State<'w> {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let camera = camera::Camera::new((0.0, 80.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
+        let camera = camera::Camera::new((0.0, 120.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
-        let camera_controller = camera::CameraController::new(4.0, 0.4);
+        let camera_controller = camera::CameraController::new(20.0, 0.4);
         // in new() after creating `camera`
 
         let mut camera_uniform = CameraUniform::new();
@@ -495,20 +495,21 @@ impl<'w> State<'w> {
                                     cgmath::Vector3::unit_z(),
                                     cgmath::Deg(0.0),
                                 );
-                                if (x > 1 && x < world::CHUNK_SIZE_X - 1 &&
-                                    y > 1 && y < world::CHUNK_SIZE_Y - 1 &&
-                                    z > 1 && z < world::CHUNK_SIZE_Z - 1) &&
-                                    (blocks[x + 1][y][z] != Air ||
-                                    blocks[x - 1][y][z] != Air ||
-                                    blocks[x][y + 1][z] != Air ||
-                                    blocks[x][y - 1][z] != Air ||
-                                    blocks[x][y][z + 1] != Air ||
-                                    blocks[x][y][z - 1] != Air) {
+                                if (x == 0 || x == world::CHUNK_SIZE_X - 1 ||
+                                    y == 0 || y == world::CHUNK_SIZE_Y - 1 ||
+                                    z == 0 || z == world::CHUNK_SIZE_Z - 1) ||
+                                    (blocks[x + 1][y][z] == Air ||
+                                    blocks[x - 1][y][z] == Air ||
+                                    blocks[x][y + 1][z] == Air ||
+                                    blocks[x][y - 1][z] == Air ||
+                                    blocks[x][y][z + 1] == Air ||
+                                    blocks[x][y][z - 1] == Air) {
                                         block_instances.push(Instance{position, rotation});
 
                                     }
                                 
                             },
+                            Stone => {},
                             _ => {}
                         }
                     }
