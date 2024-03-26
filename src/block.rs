@@ -1,6 +1,6 @@
 use crate::model::Mesh;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 
 pub enum Block {
     Air,
@@ -15,5 +15,7 @@ pub struct Cube {
 }
 
 impl Cube {
-    fn new() {}
+    fn new() {
+        // let vertex_buffer
+    }
 }

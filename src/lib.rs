@@ -495,7 +495,19 @@ impl<'w> State<'w> {
                                     cgmath::Vector3::unit_z(),
                                     cgmath::Deg(0.0),
                                 );
-                                block_instances.push(Instance{position, rotation});
+                                if (x > 1 && x < world::CHUNK_SIZE_X - 1 &&
+                                    y > 1 && y < world::CHUNK_SIZE_Y - 1 &&
+                                    z > 1 && z < world::CHUNK_SIZE_Z - 1) &&
+                                    (blocks[x + 1][y][z] != Air ||
+                                    blocks[x - 1][y][z] != Air ||
+                                    blocks[x][y + 1][z] != Air ||
+                                    blocks[x][y - 1][z] != Air ||
+                                    blocks[x][y][z + 1] != Air ||
+                                    blocks[x][y][z - 1] != Air) {
+                                        block_instances.push(Instance{position, rotation});
+
+                                    }
+                                
                             },
                             _ => {}
                         }
