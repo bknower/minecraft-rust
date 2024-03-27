@@ -1,8 +1,12 @@
+use std::collections::HashMap;
+
 use cgmath::{Point2, Point3};
 use noise::{core::perlin, NoiseFn, Perlin, Seedable};
-use tobj::Model;
 
-use crate::block::Block;
+use crate::{
+    block::Block,
+    model::{Mesh, Model},
+};
 
 pub const CHUNK_SIZE_X: usize = 16;
 pub const CHUNK_SIZE_Y: usize = 256;
@@ -43,7 +47,31 @@ impl Chunk {
         }
     }
 
-    // fn to_model() -> Model {}
+    fn to_model(self) -> Model {
+        let meshes = vec![];
+        let materials = vec![];
+        let material_map: HashMap<Block, usize> = HashMap::new();
+        let blocks = self.blocks;
+        for x in 0..blocks.len() {
+            for y in 0..blocks[0].len() {
+                for z in 0..blocks[0][0].len() {
+                    let block = blocks[x][y][z];
+                    use Block::*;
+                    let left = x == 0 || blocks[x - 1][y][z] == Air;
+                    let right = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
+                    let down = y == 0 || blocks[x][y - 1][z] == Air;
+                    let up = y == CHUNK_SIZE_X - 1 || blocks[x][y + 1][z] == Air;
+                    let back = z == 0 || blocks[x][y][z - 1] == Air;
+                    let front = z == CHUNK_SIZE_X - 1 || blocks[x][y][z + 1] == Air;
+
+                    let material_id = match material_map.get(&block) {
+                        Some(id) => id
+                    }
+                }
+            }
+        }
+        Model { meshes, materials }
+    }
 }
 pub struct World {
     // chunks: Vec<Vec<Chunk>>,
