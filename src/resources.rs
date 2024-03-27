@@ -3,7 +3,10 @@ use std::io::{BufReader, Cursor};
 use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
 
-use crate::{model::{self, ModelVertex}, texture};
+use crate::{
+    model::{self, ModelVertex},
+    texture,
+};
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {
@@ -144,7 +147,6 @@ pub async fn load_model(
                 contents: bytemuck::cast_slice(&m.mesh.indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
-			
 
             model::Mesh {
                 name: file_name.to_string(),
@@ -160,14 +162,14 @@ pub async fn load_model(
 }
 
 pub async fn load_block(
-	block_name: &str,
+    block_name: &str,
     face_textures: Vec<&str>,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
 ) -> model::Model {
-	let mut materials = Vec::new();
-	for t in face_textures {
+    let mut materials = Vec::new();
+    for t in face_textures {
         let diffuse_texture = load_texture(t, device, queue).await.unwrap();
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
@@ -191,98 +193,174 @@ pub async fn load_block(
         })
     }
 
-	let normal: [f32; 3] = [0.0, 0.0, 0.0];
-	const V0: [f32; 3] = [0.0, 0.0, 0.0];
-	const V1: [f32; 3] = [0.0, 0.0, 1.0];
-	const V2: [f32; 3] = [0.0, 1.0, 0.0];
-	const V3: [f32; 3] = [0.0, 1.0, 1.0];
-	const V4: [f32; 3] = [1.0, 0.0, 0.0];
-	const V5: [f32; 3] = [1.0, 0.0, 1.0];
-	const V6: [f32; 3] = [1.0, 1.0, 0.0];
-	const V7: [f32; 3] = [1.0, 1.0, 1.0];
-	let vertices: Vec<ModelVertex> = vec![
-		// front face
-		ModelVertex { position: V0, tex_coords: [0.0, 0.0], normal},
-		ModelVertex { position: V1, tex_coords: [1.0, 0.0], normal},
-		ModelVertex { position: V2, tex_coords: [0.0, 1.0], normal},
-		ModelVertex { position: V3, tex_coords: [1.0, 1.0], normal},
+    let normal: [f32; 3] = [0.0, 0.0, 0.0];
+    const V0: [f32; 3] = [0.0, 0.0, 0.0];
+    const V1: [f32; 3] = [0.0, 0.0, 1.0];
+    const V2: [f32; 3] = [0.0, 1.0, 0.0];
+    const V3: [f32; 3] = [0.0, 1.0, 1.0];
+    const V4: [f32; 3] = [1.0, 0.0, 0.0];
+    const V5: [f32; 3] = [1.0, 0.0, 1.0];
+    const V6: [f32; 3] = [1.0, 1.0, 0.0];
+    const V7: [f32; 3] = [1.0, 1.0, 1.0];
+    let vertices: Vec<ModelVertex> = vec![
+        // front face
+        ModelVertex {
+            position: V0,
+            tex_coords: [0.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V1,
+            tex_coords: [1.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V2,
+            tex_coords: [0.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V3,
+            tex_coords: [1.0, 1.0],
+            normal,
+        },
+        // back face
+        ModelVertex {
+            position: V4,
+            tex_coords: [1.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V5,
+            tex_coords: [0.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V6,
+            tex_coords: [1.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V7,
+            tex_coords: [0.0, 1.0],
+            normal,
+        },
+        // left face
+        ModelVertex {
+            position: V0,
+            tex_coords: [1.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V2,
+            tex_coords: [1.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V4,
+            tex_coords: [0.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V6,
+            tex_coords: [0.0, 1.0],
+            normal,
+        },
+        // right face
+        ModelVertex {
+            position: V1,
+            tex_coords: [0.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V3,
+            tex_coords: [0.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V5,
+            tex_coords: [1.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V7,
+            tex_coords: [1.0, 1.0],
+            normal,
+        },
+        // up face
+        ModelVertex {
+            position: V2,
+            tex_coords: [0.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V3,
+            tex_coords: [0.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V6,
+            tex_coords: [1.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V7,
+            tex_coords: [1.0, 1.0],
+            normal,
+        },
+        // down face
+        ModelVertex {
+            position: V0,
+            tex_coords: [0.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V1,
+            tex_coords: [1.0, 1.0],
+            normal,
+        },
+        ModelVertex {
+            position: V4,
+            tex_coords: [0.0, 0.0],
+            normal,
+        },
+        ModelVertex {
+            position: V5,
+            tex_coords: [1.0, 0.0],
+            normal,
+        },
+    ];
 
-		// back face
-		ModelVertex { position: V4, tex_coords: [1.0, 0.0], normal},
-		ModelVertex { position: V5, tex_coords: [0.0, 0.0], normal},
-		ModelVertex { position: V6, tex_coords: [1.0, 1.0], normal},
-		ModelVertex { position: V7, tex_coords: [0.0, 1.0], normal},
+    let indices: &[u32] = &[
+        // front
+        0, 1, 2, 2, 1, 3, // back
+        5, 4, 7, 7, 4, 6, // left
+        8, 9, 10, 10, 9, 11, // right
+        12, 14, 13, 13, 14, 15, // up
+        16, 17, 18, 18, 17, 19, // down
+        20, 22, 21, 21, 22, 23,
+    ];
 
-		// left face
-		ModelVertex { position: V0, tex_coords: [1.0, 0.0], normal}, // 0 8
-		ModelVertex { position: V2, tex_coords: [1.0, 1.0], normal}, // 2 9
-		ModelVertex { position: V4, tex_coords: [0.0, 0.0], normal}, // 4 10
-		ModelVertex { position: V6, tex_coords: [0.0, 1.0], normal}, // 6 11
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some(&format!("{:?} Vertex Buffer", block_name)),
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some(&format!("{:?} Index Buffer", block_name)),
+        contents: bytemuck::cast_slice(indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
 
-		// right face
-		ModelVertex { position: V1, tex_coords: [0.0, 0.0], normal}, // 12
-		ModelVertex { position: V3, tex_coords: [0.0, 1.0], normal}, // 13
-		ModelVertex { position: V5, tex_coords: [1.0, 0.0], normal}, // 14
-		ModelVertex { position: V7, tex_coords: [1.0, 1.0], normal}, // 15
-
-		// up face
-		ModelVertex { position: V2, tex_coords: [0.0, 0.0], normal}, // 16
-		ModelVertex { position: V3, tex_coords: [0.0, 1.0], normal}, // 17
-		ModelVertex { position: V6, tex_coords: [1.0, 0.0], normal}, // 18
-		ModelVertex { position: V7, tex_coords: [1.0, 1.0], normal}, // 19
-
-		// down face
-		ModelVertex { position: V0, tex_coords: [0.0, 1.0], normal}, // 20
-		ModelVertex { position: V1, tex_coords: [1.0, 1.0], normal}, // 21
-		ModelVertex { position: V4, tex_coords: [0.0, 0.0], normal}, // 22
-		ModelVertex { position: V5, tex_coords: [1.0, 0.0], normal}, // 23
-
-	];
-	
-	let indices: &[u32] = &[
-		// front
-		0, 1, 2,
-		2, 1, 3,
-
-		// back
-		5, 4, 7,
-		7, 4, 6,
-
-		// left
-		8, 9, 10,
-		10, 9, 11,
-
-		// right
-		12, 14, 13,
-		13, 14, 15,
-
-		// up
-		16, 17, 18,
-		18, 17, 19,
-
-		// down
-		20, 22, 21,
-		21, 22, 23,
-
-	];
-
-	let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some(&format!("{:?} Vertex Buffer", block_name)),
-		contents: bytemuck::cast_slice(&vertices),
-		usage: wgpu::BufferUsages::VERTEX,
-	});
-	let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some(&format!("{:?} Index Buffer", block_name)),
-		contents: bytemuck::cast_slice(indices),
-		usage: wgpu::BufferUsages::INDEX,
-	});
-
-	let mesh = model::Mesh {
-		name: block_name.to_string(),
-		vertex_buffer,
-		index_buffer,
-		num_elements: indices.len() as u32,
-		material: 0,
-	};
-	model::Model {meshes: vec![mesh], materials}
+    let mesh = model::Mesh {
+        name: block_name.to_string(),
+        vertex_buffer,
+        index_buffer,
+        num_elements: indices.len() as u32,
+        material: 0,
+    };
+    model::Model {
+        meshes: vec![mesh],
+        materials,
+    }
 }
