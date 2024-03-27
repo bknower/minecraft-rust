@@ -475,46 +475,62 @@ impl<'w> State<'w> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
-        self.world.update(self.camera.position);
+        let updated = self.world.update(self.camera.position);
 
-        let mut block_instances = vec![];
+        if updated {
+            let mut block_instances = vec![];
 
-        for chunk in self.world.chunks.as_slice() {
-            let blocks = chunk.blocks;
-            for x in 0..blocks.len() {
-                for y in 0..blocks[0].len() {
-                    for z in 0..blocks[0][0].len() {
-                        use block::Block::*;
-                        match blocks[x][y][z] {
-                            Grass => {
-                                let position = cgmath::Vector3 {
-                                    x: x as f32 + (chunk.chunk_x * world::CHUNK_SIZE_X as i32) as f32, 
-                                    y: y as f32, 
-                                    z: z as f32 + (chunk.chunk_z * world::CHUNK_SIZE_Z as i32) as f32};
-                                let rotation =                         cgmath::Quaternion::from_axis_angle(
-                                    cgmath::Vector3::unit_z(),
-                                    cgmath::Deg(0.0),
-                                );
-                                if (x == 0 || x == world::CHUNK_SIZE_X - 1 ||
-                                    y == 0 || y == world::CHUNK_SIZE_Y - 1 ||
-                                    z == 0 || z == world::CHUNK_SIZE_Z - 1) ||
-                                    (blocks[x + 1][y][z] == Air ||
-                                    blocks[x - 1][y][z] == Air ||
-                                    blocks[x][y + 1][z] == Air ||
-                                    blocks[x][y - 1][z] == Air ||
-                                    blocks[x][y][z + 1] == Air ||
-                                    blocks[x][y][z - 1] == Air) {
-                                        block_instances.push(Instance{position, rotation});
+            for chunk in self.world.chunks.as_slice() {
+                let blocks = chunk.blocks;
+                for x in 0..blocks.len() {
+                    for y in 0..blocks[0].len() {
+                        for z in 0..blocks[0][0].len() {
+                            use block::Block::*;
+                            match blocks[x][y][z] {
+                                Grass => {
+                                    let position = cgmath::Vector3 {
+                                        x: x as f32 + (chunk.chunk_x * world::CHUNK_SIZE_X as i32) as f32, 
+                                        y: y as f32, 
+                                        z: z as f32 + (chunk.chunk_z * world::CHUNK_SIZE_Z as i32) as f32};
+                                    let rotation =                         cgmath::Quaternion::from_axis_angle(
+                                        cgmath::Vector3::unit_z(),
+                                        cgmath::Deg(0.0),
+                                    );
+                                    if (x == 0 || x == world::CHUNK_SIZE_X - 1 ||
+                                        y == 0 || y == world::CHUNK_SIZE_Y - 1 ||
+                                        z == 0 || z == world::CHUNK_SIZE_Z - 1) ||
+                                        (blocks[x + 1][y][z] == Air ||
+                                        blocks[x - 1][y][z] == Air ||
+                                        blocks[x][y + 1][z] == Air ||
+                                        blocks[x][y - 1][z] == Air ||
+                                        blocks[x][y][z + 1] == Air ||
+                                        blocks[x][y][z - 1] == Air) {
+                                            block_instances.push(Instance{position, rotation});
 
-                                    }
-                                
-                            },
-                            Stone => {},
-                            _ => {}
+                                        }
+                                    
+                                },
+                                Stone => {},
+                                _ => {}
+                            }
                         }
                     }
                 }
             }
+            self.instances = block_instances;
+
+            let instance_data = self
+                .instances
+                .iter()
+                .map(Instance::to_raw)
+                .collect::<Vec<_>>();
+            self.instance_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Instance Buffer"),
+                    contents: bytemuck::cast_slice(&instance_data),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
         }
 
         // const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -555,20 +571,7 @@ impl<'w> State<'w> {
         //         })
         //     })
         //     .collect::<Vec<_>>();
-        self.instances = block_instances;
 
-        let instance_data = self
-            .instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-        self.instance_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Instance Buffer"),
-                contents: bytemuck::cast_slice(&instance_data),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
         self.frame += 1;
     }
 

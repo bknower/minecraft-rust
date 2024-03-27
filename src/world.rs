@@ -1,5 +1,6 @@
 use cgmath::{Point2, Point3};
 use noise::{core::perlin, NoiseFn, Perlin, Seedable};
+use tobj::Model;
 
 use crate::block::Block;
 
@@ -41,6 +42,8 @@ impl Chunk {
             blocks,
         }
     }
+
+    // fn to_model() -> Model {}
 }
 pub struct World {
     // chunks: Vec<Vec<Chunk>>,
@@ -61,7 +64,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 3;
+        let render_distance = 5;
         let chunks = vec![];
         Self {
             chunks,
@@ -71,7 +74,7 @@ impl World {
         }
     }
 
-    pub fn update(&mut self, position: Point3<f32>) {
+    pub fn update(&mut self, position: Point3<f32>) -> bool {
         let old_chunk_position = position_to_chunk_position(self.position);
         let chunk_position = position_to_chunk_position(position);
         if old_chunk_position != chunk_position || self.chunks.len() == 0 {
@@ -81,7 +84,7 @@ impl World {
                 old_chunk_position, chunk_position
             );
             let max_distance = 2 * self.render_distance * self.render_distance;
-            let chunks_in_render_distance: Vec<Point2<i32>> = (-self.render_distance
+            let mut chunks_in_render_distance: Vec<Point2<i32>> = (-self.render_distance
                 ..=self.render_distance)
                 .flat_map(|x| {
                     (-self.render_distance..=self.render_distance).filter_map(move |z| {
@@ -94,13 +97,57 @@ impl World {
                     })
                 })
                 .collect();
-            chunks_in_render_distance
-                .iter()
-                .for_each(|chunk| println!("chunk: {:?}", chunk));
-            self.chunks = chunks_in_render_distance
-                .iter()
-                .map(|point| Chunk::new(point.x, point.y, self.perlin))
-                .collect();
+            // chunks_in_render_distance
+            //     .iter()
+            //     .for_each(|chunk| println!("chunk: {:?}", chunk));
+
+            let mut new_chunks: Vec<Chunk> = vec![];
+
+            // copy the already existing chunks to the new chunk array
+            while let Some(chunk) = self.chunks.pop() {
+                if let Some(index) = chunks_in_render_distance.iter().position(|chunk_coord| {
+                    chunk.chunk_x == chunk_coord.x && chunk.chunk_z == chunk_coord.y
+                }) {
+                    chunks_in_render_distance.swap_remove(index);
+                    println!(
+                        "copied chunk: Point2 [{:?}, {:?}]",
+                        chunk.chunk_x, chunk.chunk_z
+                    );
+                    new_chunks.push(chunk);
+                }
+            }
+
+            // iterate over the remaining chunks (should be the newly rendered ones)
+            chunks_in_render_distance.iter().for_each(|chunk_coord| {
+                let new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
+                new_chunks.push(new_chunk);
+                println!("new_chunk: {:?}", chunk_coord);
+            });
+            self.chunks = new_chunks;
+            // for chunk in self.chunks {
+            //     if chunks_in_render_distance.iter().any(|chunk_coord| {
+            //         chunk.chunk_x == chunk_coord.x && chunk.chunk_z == chunk_coord.y
+            //     }) {
+            //         new_chunks.push(chunk);
+            //     }
+            // }
+            // add any new chunks
+            // chunks_in_render_distance.iter().for_each(|chunk_coord| {
+            //     let chunk = self
+            //         .chunks
+            //         .iter()
+            //         .find(|c| c.chunk_x == chunk_coord.x && c.chunk_z == chunk_coord.y);
+            //     match chunk {
+            //         Some(chunk) => new_chunks.push(),
+            //         None => new_chunks.push(Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin)),
+            //     }
+            // });
+            // self.chunks = chunks_in_render_distance
+            //     .iter()
+            //     .map(|point| Chunk::new(point.x, point.y, self.perlin))
+            //     .collect();
+            return true;
         }
+        return false;
     }
 }
