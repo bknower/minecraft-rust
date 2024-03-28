@@ -467,6 +467,7 @@ impl<'w> State<'w> {
     }
 
     fn update(&mut self, dt: instant::Duration) {
+        #[allow(unused)]
         let frame = self.frame;
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform.update_view_proj(&self.camera, &self.projection);

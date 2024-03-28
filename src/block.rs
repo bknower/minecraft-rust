@@ -18,11 +18,10 @@ impl Block {
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
     ) -> Option<Material> {
-        
         let file_name_option = match self {
-            Stone => Some("stone.png"),
-            Grass => Some("grass.png"),
-            Air => None
+            Block::Stone => Some("stone.png"),
+            Block::Grass => Some("grass.png"),
+            Block::Air => None,
         };
 
         match file_name_option {
@@ -45,14 +44,13 @@ impl Block {
                 Some(Material {
                     name: file_name.to_string(),
                     diffuse_texture,
-                    bind_group
-                }) 
+                    bind_group,
+                })
             }
-            None => None
+            None => None,
         }
-        
     }
-}ß
+}
 
 pub struct Cube {
     pub vertex_buffer: wgpu::Buffer,
