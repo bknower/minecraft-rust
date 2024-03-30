@@ -1,17 +1,20 @@
 use std::collections::HashMap;
 
-use cgmath::{Point2, Point3, Vector3};
+use cgmath::{Point2, Point3, Vector2, Vector3};
 use noise::{core::perlin, NoiseFn, Perlin, Seedable};
+use tobj::Material;
 
 use crate::{
     block::Block,
     model::{Mesh, Model, ModelVertex},
 };
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, Device};
 
 pub const CHUNK_SIZE_X: usize = 16;
 pub const CHUNK_SIZE_Y: usize = 256;
 pub const CHUNK_SIZE_Z: usize = 16;
+
+pub const ATLAS_SIZE: usize = 32;
 
 pub struct Chunk {
     pub chunk_x: i32,
@@ -48,15 +51,17 @@ impl Chunk {
         }
     }
 
-    pub async fn to_model(
-        self,
+    // pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    //     let mesh = self.to_mesh(&device, &queue);
+    //     self.mesh = Some(mesh);
+    // }
+
+    pub fn to_mesh(
+        &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        layout: &wgpu::BindGroupLayout,
-    ) -> Model {
-        let mut meshes: Vec<Mesh> = vec![];
-        let mut materials = vec![];
-        let material_map: HashMap<Block, usize> = HashMap::new();
+        // layout: &wgpu::BindGroupLayout,
+    ) -> Mesh {
         let blocks = self.blocks;
 
         let normal: [f32; 3] = [0.0, 0.0, 0.0];
@@ -207,7 +212,11 @@ impl Chunk {
             },
         ];
 
-        fn add_position_to_vertices(verts: &[ModelVertex], p: Vector3<f32>) -> Vec<ModelVertex> {
+        fn add_position_to_vertices(
+            verts: &[ModelVertex],
+            p: Vector3<f32>,
+            atlas_coords: Vector2<f32>,
+        ) -> Vec<ModelVertex> {
             verts
                 .iter()
                 .map(|vertex| {
@@ -218,7 +227,9 @@ impl Chunk {
                     } = vertex;
                     ModelVertex {
                         position: (p + Vector3::<f32>::from(*position)).into(),
-                        tex_coords: *tex_coords,
+                        tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
+                            / ATLAS_SIZE as f32)
+                            .into(),
                         normal: *normal,
                     }
                 })
@@ -234,6 +245,9 @@ impl Chunk {
             );
         }
 
+        let mut vertices: Vec<ModelVertex> = vec![];
+        let mut indices: Vec<u32> = vec![];
+
         for x in 0..blocks.len() {
             for y in 0..blocks[0].len() {
                 for z in 0..blocks[0][0].len() {
@@ -242,28 +256,14 @@ impl Chunk {
                     let left = x == 0 || blocks[x - 1][y][z] == Air;
                     let right = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
                     let down = y == 0 || blocks[x][y - 1][z] == Air;
-                    let up = y == CHUNK_SIZE_X - 1 || blocks[x][y + 1][z] == Air;
+                    let up = y == CHUNK_SIZE_Y - 1 || blocks[x][y + 1][z] == Air;
                     let back = z == 0 || blocks[x][y][z - 1] == Air;
-                    let front = z == CHUNK_SIZE_X - 1 || blocks[x][y][z + 1] == Air;
+                    let front = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
 
-                    let material_id = match material_map.get(&block) {
-                        Some(id) => Some(*id),
-                        None => {
-                            let material = block.material(device, queue, layout).await;
-                            if let Some(material) = material {
-                                materials.push(material);
-                                Some(materials.len() - 1)
-                            } else {
-                                None
-                            }
-                        }
-                    };
+                    let atlas_coords = block.get_atlas_coords();
 
-                    match material_id {
-                        Some(material_id) => {
-                            let mut vertices: Vec<ModelVertex> = vec![];
-                            let mut indices: Vec<u32> = vec![];
-
+                    match atlas_coords {
+                        Some(atlas_coords) => {
                             let position = Vector3::new(x as f32, y as f32, z as f32);
 
                             let face_tuples = vec![
@@ -283,6 +283,7 @@ impl Chunk {
                                             vertices.append(&mut add_position_to_vertices(
                                                 direction_vertices,
                                                 position,
+                                                atlas_coords,
                                             ));
                                             add_indices(
                                                 direction_indices,
@@ -293,28 +294,6 @@ impl Chunk {
                                     }
                                 }
                             }
-                            let vertex_buffer =
-                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some(&format!("{:?} Vertex Buffer", "block_name")),
-                                    contents: bytemuck::cast_slice(&vertices),
-                                    usage: wgpu::BufferUsages::VERTEX,
-                                });
-                            let index_buffer =
-                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                    label: Some(&format!("{:?} Index Buffer", "block_name")),
-                                    contents: bytemuck::cast_slice(indices.as_slice()),
-                                    usage: wgpu::BufferUsages::INDEX,
-                                });
-
-                            let mesh = Mesh {
-                                name: "".to_string(),
-                                vertex_buffer,
-                                index_buffer,
-                                num_elements: indices.len() as u32,
-                                material: 0,
-                            };
-
-                            meshes.push(mesh);
                         }
                         None => {}
                     }
@@ -322,7 +301,26 @@ impl Chunk {
             }
         }
 
-        Model { meshes, materials }
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{:?} Vertex Buffer", "block_name")),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{:?} Index Buffer", "block_name")),
+            contents: bytemuck::cast_slice(indices.as_slice()),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let mesh = Mesh {
+            name: "".to_string(),
+            vertex_buffer,
+            index_buffer,
+            num_elements: indices.len() as u32,
+            material: 0,
+        };
+
+        mesh
     }
 }
 pub struct World {
@@ -354,10 +352,15 @@ impl World {
         }
     }
 
-    pub fn update(&mut self, position: Point3<f32>) -> bool {
+    pub fn update(
+        &mut self,
+        position: Point3<f32>,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> bool {
         let old_chunk_position = position_to_chunk_position(self.position);
         let chunk_position = position_to_chunk_position(position);
-        if old_chunk_position != chunk_position || self.chunks.len() == 0 {
+        if old_chunk_position != chunk_position || self.chunks.is_empty() {
             self.position = position;
             println!(
                 "old_chunk_position: {:?}, chunk_position: {:?}",
@@ -404,30 +407,11 @@ impl World {
                 println!("new_chunk: {:?}", chunk_coord);
             });
             self.chunks = new_chunks;
-            // for chunk in self.chunks {
-            //     if chunks_in_render_distance.iter().any(|chunk_coord| {
-            //         chunk.chunk_x == chunk_coord.x && chunk.chunk_z == chunk_coord.y
-            //     }) {
-            //         new_chunks.push(chunk);
-            //     }
+            // for mut chunk in self.chunks {
+            //     chunk.update(device, queue);
             // }
-            // add any new chunks
-            // chunks_in_render_distance.iter().for_each(|chunk_coord| {
-            //     let chunk = self
-            //         .chunks
-            //         .iter()
-            //         .find(|c| c.chunk_x == chunk_coord.x && c.chunk_z == chunk_coord.y);
-            //     match chunk {
-            //         Some(chunk) => new_chunks.push(),
-            //         None => new_chunks.push(Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin)),
-            //     }
-            // });
-            // self.chunks = chunks_in_render_distance
-            //     .iter()
-            //     .map(|point| Chunk::new(point.x, point.y, self.perlin))
-            //     .collect();
             return true;
         }
-        return false;
+        false
     }
 }

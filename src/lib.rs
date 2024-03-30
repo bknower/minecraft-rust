@@ -6,7 +6,7 @@ mod world;
 mod block;
 use camera::{Camera, CameraController, Projection};
 use cgmath::{num_traits::float, prelude::*};
-use model::{Model, Vertex};
+use model::{DrawModel, Mesh, Model, Vertex};
 use std::env;
 use texture::Texture;
 use wgpu::util::DeviceExt;
@@ -19,6 +19,8 @@ use winit::{
     window::WindowBuilder,
 };
 
+use crate::model::Material;
+use crate::resources::load_texture;
 use crate::world::World;
 
 struct Instance {
@@ -155,7 +157,7 @@ struct State<'w> {
     instance_buffer: wgpu::Buffer,
     frame: u32,
     depth_texture: Texture,
-    obj_model: Model,
+    atlas: Material,
     mouse_pressed: bool,
     world: World
 }
@@ -348,7 +350,7 @@ impl<'w> State<'w> {
 
         const NUM_INSTANCES_PER_ROW: u32 = 10;
         const SPACE_BETWEEN: f32 = 3.0;
-        let world = World::new(1);
+        let mut world = World::new(1);
 
         // let blocks = world.chunks.into_iter()
         // .flat_map(|chunk| {
@@ -394,11 +396,31 @@ impl<'w> State<'w> {
         //     resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
         //         .await
         //         .unwrap();
-		let obj_model =
-		resources::load_block("stone", 
-		vec!["stone.png"], &device, &queue, &texture_bind_group_layout)
-			.await;
-        
+		// let obj_model =
+		// resources::load_block("stone", 
+		// vec!["atlas.png"], &device, &queue, &texture_bind_group_layout)
+		// 	.await;
+
+		let atlas_texture = load_texture("atlas.png", &device, &queue).await.unwrap();
+		let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                },
+            ],
+            label: None,
+        });
+		let atlas = Material {
+			name: "atlas".to_string(),
+			diffuse_texture: atlas_texture,
+			bind_group
+		};
 
         Self {
             surface,
@@ -420,7 +442,7 @@ impl<'w> State<'w> {
             instance_buffer,
             frame,
             depth_texture,
-            obj_model,
+            atlas,
             mouse_pressed: false,
             world
         }
@@ -476,49 +498,24 @@ impl<'w> State<'w> {
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
-        let updated = self.world.update(self.camera.position);
+        let updated = self.world.update(self.camera.position, &self.device, &self.queue);
 
         if updated {
-            let mut block_instances = vec![];
+            let mut chunk_instances = vec![];
 
             for chunk in self.world.chunks.as_slice() {
-                let blocks = chunk.blocks;
-                for x in 0..blocks.len() {
-                    for y in 0..blocks[0].len() {
-                        for z in 0..blocks[0][0].len() {
-                            use block::Block::*;
-                            match blocks[x][y][z] {
-                                Grass => {
-                                    let position = cgmath::Vector3 {
-                                        x: x as f32 + (chunk.chunk_x * world::CHUNK_SIZE_X as i32) as f32, 
-                                        y: y as f32, 
-                                        z: z as f32 + (chunk.chunk_z * world::CHUNK_SIZE_Z as i32) as f32};
-                                    let rotation =                         cgmath::Quaternion::from_axis_angle(
-                                        cgmath::Vector3::unit_z(),
-                                        cgmath::Deg(0.0),
-                                    );
-                                    if (x == 0 || x == world::CHUNK_SIZE_X - 1 ||
-                                        y == 0 || y == world::CHUNK_SIZE_Y - 1 ||
-                                        z == 0 || z == world::CHUNK_SIZE_Z - 1) ||
-                                        (blocks[x + 1][y][z] == Air ||
-                                        blocks[x - 1][y][z] == Air ||
-                                        blocks[x][y + 1][z] == Air ||
-                                        blocks[x][y - 1][z] == Air ||
-                                        blocks[x][y][z + 1] == Air ||
-                                        blocks[x][y][z - 1] == Air) {
-                                            block_instances.push(Instance{position, rotation});
 
-                                        }
-                                    
-                                },
-                                Stone => {},
-                                _ => {}
-                            }
-                        }
-                    }
-                }
+				let position = cgmath::Vector3 {
+					x: (chunk.chunk_x * world::CHUNK_SIZE_X as i32) as f32, 
+					y: 0.0, 
+					z: (chunk.chunk_z * world::CHUNK_SIZE_Z as i32) as f32};
+				let rotation =                         cgmath::Quaternion::from_axis_angle(
+					cgmath::Vector3::unit_z(),
+					cgmath::Deg(0.0),
+				);
+				chunk_instances.push(Instance {position, rotation});
             }
-            self.instances = block_instances;
+            self.instances = chunk_instances;
 
             let instance_data = self
                 .instances
@@ -587,6 +584,8 @@ impl<'w> State<'w> {
                 label: Some("Render Encoder"),
             });
         {
+			let meshes: Vec<Mesh> = self.world.chunks.iter().map(|chunk| chunk.to_mesh(&self.device, &self.queue)).collect();
+			let mesh_refs: Vec<&Mesh> = meshes.iter().map(|mesh| mesh).collect();
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -615,15 +614,28 @@ impl<'w> State<'w> {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
-            // render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            // render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            // // render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            // // render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
-            use model::DrawModel;
-            render_pass.draw_model_instanced(
-                &self.obj_model,
-                0..self.instances.len() as u32,
-                &self.camera_bind_group,
-            );
+            // use model::DrawModel;
+            // render_pass.draw_model_instanced(
+            //     &self.obj_model,
+            //     0..self.instances.len() as u32,
+            //     &self.camera_bind_group,
+            // );
+			// let meshes: Vec<Option<Mesh>> = self.world.chunks.iter().map(|chunk|  chunk.mesh).collect();
+			// self.world.chunks.iter().for_each(|chunk| {
+			// 	let mesh = chunk.mesh.unwrap();
+
+			// 	// if let Some(mesh) = chunk.mesh {
+			// 		render_pass.draw_mesh(&mesh, &self.atlas, &self.camera_bind_group);
+			// 	// }
+			// });
+			for i in 0..mesh_refs.len() {
+				let mesh = mesh_refs.get(i).unwrap();
+				render_pass.draw_mesh_instanced(mesh, &self.atlas, (i as u32)..(i as u32+1), &self.camera_bind_group);
+			}
+
 			// render_pass.
         }
 

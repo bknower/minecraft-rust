@@ -85,11 +85,11 @@ pub trait DrawModel<'a> {
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
     );
-	fn draw_cube_instanced(
-		&mut self,
+    fn draw_cube_instanced(
+        &mut self,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
-	);
+    );
 }
 
 impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
@@ -112,7 +112,6 @@ where
         instances: Range<u32>,
         camera_bind_group: &'b wgpu::BindGroup,
     ) {
-		
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, &material.bind_group, &[]);
@@ -135,11 +134,10 @@ where
         }
     }
 
-	fn draw_cube_instanced(
-		&mut self,
+    fn draw_cube_instanced(
+        &mut self,
         instances: Range<u32>,
         camera_bind_group: &'b wgpu::BindGroup,
-	) {
-		
-	}
+    ) {
+    }
 }

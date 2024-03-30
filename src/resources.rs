@@ -288,7 +288,7 @@ pub async fn load_block(
             normal,
         },
         // up face
-        ModelVertex {
+        ModelVertex { 
             position: V2,
             tex_coords: [0.0, 0.0],
             normal,

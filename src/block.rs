@@ -1,3 +1,5 @@
+use cgmath::Vector2;
+
 use crate::{
     model::{Material, Mesh},
     resources::load_texture,
@@ -12,6 +14,13 @@ pub enum Block {
 }
 
 impl Block {
+	pub fn get_atlas_coords(self) -> Option<Vector2<f32>> {
+		match self {
+			Block::Stone => Some([19.0, 6.0].into()),
+			Block::Grass => Some([1.0, 10.0].into()),
+			_ => None
+		}
+	}
     pub async fn material(
         self,
         device: &wgpu::Device,
