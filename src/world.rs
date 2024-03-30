@@ -99,23 +99,23 @@ impl Chunk {
 
         let right_vertices = vec![
             ModelVertex {
-                position: V0.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V2.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V4.into(),
+                position: V1.into(),
                 tex_coords: [0.0, 0.0],
                 normal,
             },
             ModelVertex {
-                position: V6.into(),
+                position: V3.into(),
                 tex_coords: [0.0, 1.0],
+                normal,
+            },
+            ModelVertex {
+                position: V5.into(),
+                tex_coords: [1.0, 0.0],
+                normal,
+            },
+            ModelVertex {
+                position: V7.into(),
+                tex_coords: [1.0, 1.0],
                 normal,
             },
         ];
@@ -123,11 +123,11 @@ impl Chunk {
         let down_vertices = vec![
             ModelVertex {
                 position: V0.into(),
-                tex_coords: [1.0, 0.0],
+                tex_coords: [0.0, 1.0],
                 normal,
             },
             ModelVertex {
-                position: V2.into(),
+                position: V1.into(),
                 tex_coords: [1.0, 1.0],
                 normal,
             },
@@ -137,53 +137,53 @@ impl Chunk {
                 normal,
             },
             ModelVertex {
-                position: V6.into(),
-                tex_coords: [0.0, 1.0],
+                position: V5.into(),
+                tex_coords: [1.0, 0.0],
                 normal,
             },
         ];
 
         let up_vertices = vec![
             ModelVertex {
-                position: V0.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
                 position: V2.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V4.into(),
                 tex_coords: [0.0, 0.0],
                 normal,
             },
             ModelVertex {
-                position: V6.into(),
+                position: V3.into(),
                 tex_coords: [0.0, 1.0],
+                normal,
+            },
+            ModelVertex {
+                position: V6.into(),
+                tex_coords: [1.0, 0.0],
+                normal,
+            },
+            ModelVertex {
+                position: V7.into(),
+                tex_coords: [1.0, 1.0],
                 normal,
             },
         ];
 
         let back_vertices = vec![
             ModelVertex {
-                position: V0.into(),
+                position: V4.into(),
                 tex_coords: [1.0, 0.0],
                 normal,
             },
             ModelVertex {
-                position: V2.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V4.into(),
+                position: V5.into(),
                 tex_coords: [0.0, 0.0],
                 normal,
             },
             ModelVertex {
                 position: V6.into(),
+                tex_coords: [1.0, 1.0],
+                normal,
+            },
+            ModelVertex {
+                position: V7.into(),
                 tex_coords: [0.0, 1.0],
                 normal,
             },
@@ -192,22 +192,22 @@ impl Chunk {
         let front_vertices = vec![
             ModelVertex {
                 position: V0.into(),
+                tex_coords: [0.0, 0.0],
+                normal,
+            },
+            ModelVertex {
+                position: V1.into(),
                 tex_coords: [1.0, 0.0],
                 normal,
             },
             ModelVertex {
                 position: V2.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V4.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V6.into(),
                 tex_coords: [0.0, 1.0],
+                normal,
+            },
+            ModelVertex {
+                position: V3.into(),
+                tex_coords: [1.0, 1.0],
                 normal,
             },
         ];
@@ -227,9 +227,10 @@ impl Chunk {
                     } = vertex;
                     ModelVertex {
                         position: (p + Vector3::<f32>::from(*position)).into(),
-                        tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
-                            / ATLAS_SIZE as f32)
-                            .into(),
+                        // tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
+                        //     / ATLAS_SIZE as f32)
+                        //     .into(),
+                        tex_coords: *tex_coords,
                         normal: *normal,
                     }
                 })
@@ -240,7 +241,7 @@ impl Chunk {
             indices.append(
                 &mut vert_indices
                     .iter()
-                    .map(|i| (i + starting_length as u32) as u32)
+                    .map(|i| (i + starting_length as u32))
                     .collect(),
             );
         }
@@ -262,40 +263,30 @@ impl Chunk {
 
                     let atlas_coords = block.get_atlas_coords();
 
-                    match atlas_coords {
-                        Some(atlas_coords) => {
-                            let position = Vector3::new(x as f32, y as f32, z as f32);
+                    if let Some(atlas_coords) = atlas_coords {
+                        let position = Vector3::new(x as f32, y as f32, z as f32);
 
-                            let face_tuples = vec![
-                                (left, left_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                                (right, right_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
-                                (down, down_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
-                                (up, up_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                                (back, back_vertices.as_slice(), vec![1, 0, 3, 3, 0, 2]),
-                                (front, front_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                            ];
+                        let face_tuples = vec![
+                            (left, left_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
+                            (right, right_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
+                            (down, down_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
+                            (up, up_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
+                            (back, back_vertices.as_slice(), vec![1, 0, 3, 3, 0, 2]),
+                            (front, front_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
+                        ];
 
-                            for face_tuple in face_tuples {
-                                match face_tuple {
-                                    (direction, direction_vertices, direction_indices) => {
-                                        if direction {
-                                            let starting_length = vertices.len() + 1;
-                                            vertices.append(&mut add_position_to_vertices(
-                                                direction_vertices,
-                                                position,
-                                                atlas_coords,
-                                            ));
-                                            add_indices(
-                                                direction_indices,
-                                                starting_length,
-                                                &mut indices,
-                                            );
-                                        }
-                                    }
-                                }
+                        for face_tuple in face_tuples {
+                            let (direction, direction_vertices, direction_indices) = face_tuple;
+                            if direction {
+                                let starting_length = vertices.len() + 1;
+                                vertices.append(&mut add_position_to_vertices(
+                                    direction_vertices,
+                                    position,
+                                    atlas_coords,
+                                ));
+                                add_indices(direction_indices, starting_length, &mut indices);
                             }
                         }
-                        None => {}
                     }
                 }
             }
@@ -342,7 +333,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 5;
+        let render_distance = 2;
         let chunks = vec![];
         Self {
             chunks,
