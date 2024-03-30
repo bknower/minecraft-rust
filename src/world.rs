@@ -241,7 +241,7 @@ impl Chunk {
             indices.append(
                 &mut vert_indices
                     .iter()
-                    .map(|i| (i + starting_length as u32))
+                    .map(|i| (i + starting_length as u32) - 1)
                     .collect(),
             );
         }
@@ -333,7 +333,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 2;
+        let render_distance = 1;
         let chunks = vec![];
         Self {
             chunks,
