@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    mem::size_of,
+};
 
 use cgmath::{InnerSpace, Point2, Point3, Vector2, Vector3};
 use instant::{now, Duration};
@@ -258,8 +261,9 @@ impl Chunk {
             );
         }
 
-        let mut vertices: Vec<ModelVertex> = vec![];
-        let mut indices: Vec<u32> = vec![];
+        // a chunk is 16  * 16 * 256 blocks
+        let mut vertices: Vec<ModelVertex> = Vec::with_capacity(50000);
+        let mut indices: Vec<u32> = Vec::with_capacity(68000);
 
         for x in 0..CHUNK_SIZE_X {
             for y in 0..CHUNK_SIZE_Y {
@@ -334,6 +338,12 @@ impl Chunk {
             num_elements: indices.len() as u32,
             material: 0,
         };
+
+        // println!(
+        //     "vertices: {:?}, indices: {:?}",
+        //     vertices.len(),
+        //     indices.len()
+        // );
 
         mesh
     }
@@ -480,7 +490,7 @@ impl World {
             println!(
                 "chunk time: {:?}ms, mesh time: {:?}ms",
                 chunk_end - chunk_start,
-                mesh_end - mesh_start
+                mesh_end - mesh_start,
             );
         }
         updated
