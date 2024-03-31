@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use cgmath::{Point2, Point3, Vector2, Vector3};
+use cgmath::{InnerSpace, Point2, Point3, Vector2, Vector3};
 use instant::Duration;
 use noise::{core::perlin, NoiseFn, Perlin, Seedable};
 use tobj::Material;
@@ -347,6 +347,7 @@ fn position_to_chunk_position(p: Point3<f32>) -> Point2<i32> {
     ]
     .into()
 }
+
 impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
@@ -373,6 +374,7 @@ impl World {
         let chunk_position = position_to_chunk_position(position);
         if old_chunk_position != chunk_position || self.chunks.is_empty() {
             self.position = position;
+            self.chunks_to_generate.clear();
             println!(
                 "old_chunk_position: {:?}, chunk_position: {:?}",
                 old_chunk_position, chunk_position
@@ -429,8 +431,13 @@ impl World {
 
             // iterate over the remaining chunks (should be the newly rendered
             // ones)
-            self.chunks_to_generate
-                .extend(chunks_in_render_distance.iter());
+            let mut chunks_vec: Vec<Point2<i32>> = chunks_in_render_distance.into_iter().collect();
+            chunks_vec.sort_by(|a, b| {
+                let da = (a - chunk_position).magnitude2();
+                let db = (b - chunk_position).magnitude2();
+                da.cmp(&db)
+            });
+            self.chunks_to_generate.extend(chunks_vec);
 
             // let now = instant::Instant::now();
             // let dt = now - last_render_time;
