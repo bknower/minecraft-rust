@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use cgmath::{InnerSpace, Point2, Point3, Vector2, Vector3};
-use instant::Duration;
+use instant::{now, Duration};
 use noise::{core::perlin, NoiseFn, Perlin, Seedable};
 use tobj::Material;
 
@@ -79,7 +79,7 @@ impl Chunk {
         const V6: Vector3<f32> = Vector3::new(1.0, 1.0, 0.0);
         const V7: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0);
 
-        let left_vertices = vec![
+        let left_vertices = [
             ModelVertex {
                 position: V0.into(),
                 tex_coords: [1.0, 0.0],
@@ -102,7 +102,7 @@ impl Chunk {
             },
         ];
 
-        let right_vertices = vec![
+        let right_vertices = [
             ModelVertex {
                 position: V1.into(),
                 tex_coords: [0.0, 0.0],
@@ -125,7 +125,7 @@ impl Chunk {
             },
         ];
 
-        let down_vertices = vec![
+        let down_vertices = [
             ModelVertex {
                 position: V0.into(),
                 tex_coords: [0.0, 1.0],
@@ -148,7 +148,7 @@ impl Chunk {
             },
         ];
 
-        let up_vertices = vec![
+        let up_vertices = [
             ModelVertex {
                 position: V2.into(),
                 tex_coords: [0.0, 0.0],
@@ -171,7 +171,7 @@ impl Chunk {
             },
         ];
 
-        let back_vertices = vec![
+        let back_vertices = [
             ModelVertex {
                 position: V4.into(),
                 tex_coords: [1.0, 0.0],
@@ -194,7 +194,7 @@ impl Chunk {
             },
         ];
 
-        let front_vertices = vec![
+        let front_vertices = [
             ModelVertex {
                 position: V0.into(),
                 tex_coords: [0.0, 0.0],
@@ -216,6 +216,13 @@ impl Chunk {
                 normal,
             },
         ];
+
+        let left_indices = [0, 1, 2, 2, 1, 3];
+        let right_indices = [0, 2, 1, 1, 2, 3];
+        let down_indices = [0, 2, 1, 1, 2, 3];
+        let up_indices = [0, 1, 2, 2, 1, 3];
+        let front_indices = [0, 1, 2, 2, 1, 3];
+        let back_indices = [1, 0, 3, 3, 0, 2];
 
         fn add_position_to_vertices(
             verts: &[ModelVertex],
@@ -242,7 +249,7 @@ impl Chunk {
                 .collect()
         }
 
-        fn add_indices(vert_indices: Vec<u32>, starting_length: usize, indices: &mut Vec<u32>) {
+        fn add_indices(vert_indices: [u32; 6], starting_length: usize, indices: &mut Vec<u32>) {
             indices.append(
                 &mut vert_indices
                     .iter()
@@ -273,13 +280,13 @@ impl Chunk {
                         // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
                         let position = Vector3::new(x as f32, y as f32, z as f32);
                         let texture_length = atlas_coords.len();
-                        let face_tuples = vec![
-                            (left, left_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                            (right, right_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
-                            (down, down_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
-                            (up, up_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                            (front, front_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                            (back, back_vertices.as_slice(), vec![1, 0, 3, 3, 0, 2]),
+                        let face_tuples = [
+                            (left, left_vertices.as_slice(), left_indices),
+                            (right, right_vertices.as_slice(), right_indices),
+                            (down, down_vertices.as_slice(), down_indices),
+                            (up, up_vertices.as_slice(), up_indices),
+                            (front, front_vertices.as_slice(), front_indices),
+                            (back, back_vertices.as_slice(), back_indices),
                         ];
 
                         for (i, (direction, direction_vertices, direction_indices)) in
@@ -352,7 +359,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 10;
+        let render_distance = 5;
         let chunks = vec![];
         Self {
             chunks,
@@ -455,15 +462,26 @@ impl World {
             updated = true;
         }
         let start = instant::Instant::now();
-        let max_time: Duration = Duration::from_millis(50);
+        let desired_fps = 120;
+        let max_time: Duration = Duration::from_millis(1000 / (2 * desired_fps));
 
         while !self.chunks_to_generate.is_empty() && instant::Instant::now() < start + max_time {
             // println!("chunks to generate: {:?}", self.chunks_to_generate);
             let chunk_coord = self.chunks_to_generate.pop_front().unwrap();
+            let chunk_start = now();
             let mut new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
+            let chunk_end = now();
+
+            let mesh_start = now();
             new_chunk.update(device, queue);
+            let mesh_end = now();
             self.chunks.push(new_chunk);
             println!("new_chunk: {:?}", chunk_coord);
+            println!(
+                "chunk time: {:?}ms, mesh time: {:?}ms",
+                chunk_end - chunk_start,
+                mesh_end - mesh_start
+            );
         }
         updated
     }
