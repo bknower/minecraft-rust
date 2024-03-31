@@ -54,8 +54,10 @@ impl Chunk {
     }
 
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mesh = self.to_mesh(&device, &queue);
-        self.mesh = Some(mesh);
+        if let None = self.mesh {
+            let mesh = self.to_mesh(device, queue);
+            self.mesh = Some(mesh);
+        }
     }
 
     pub fn to_mesh(
