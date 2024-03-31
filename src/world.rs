@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use cgmath::{Point2, Point3, Vector2, Vector3};
+use instant::Duration;
 use noise::{core::perlin, NoiseFn, Perlin, Seedable};
 use tobj::Material;
 
@@ -268,6 +269,8 @@ impl Chunk {
                     let atlas_coords = block.get_atlas_coords();
 
                     if let Some(atlas_coords) = atlas_coords {
+                        // let chunk_position =
+                        // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
                         let position = Vector3::new(x as f32, y as f32, z as f32);
                         let texture_length = atlas_coords.len();
                         let face_tuples = vec![
@@ -334,6 +337,7 @@ pub struct World {
     pub render_distance: i32,
     pub perlin: Perlin,
     pub position: Point3<f32>,
+    pub chunks_to_generate: VecDeque<Point2<i32>>,
 }
 
 fn position_to_chunk_position(p: Point3<f32>) -> Point2<i32> {
@@ -354,6 +358,7 @@ impl World {
             render_distance,
             perlin,
             position: (0.0, 0.0, 0.0).into(),
+            chunks_to_generate: VecDeque::new(),
         }
     }
 
@@ -363,6 +368,7 @@ impl World {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> bool {
+        let mut updated = false;
         let old_chunk_position = position_to_chunk_position(self.position);
         let chunk_position = position_to_chunk_position(position);
         if old_chunk_position != chunk_position || self.chunks.is_empty() {
@@ -372,7 +378,7 @@ impl World {
                 old_chunk_position, chunk_position
             );
             let max_distance = 2 * self.render_distance * self.render_distance;
-            let mut chunks_in_render_distance: Vec<Point2<i32>> = (-self.render_distance
+            let mut chunks_in_render_distance: HashSet<Point2<i32>> = (-self.render_distance
                 ..=self.render_distance)
                 .flat_map(|x| {
                     (-self.render_distance..=self.render_distance).filter_map(move |z| {
@@ -385,38 +391,73 @@ impl World {
                     })
                 })
                 .collect();
+
+            // remove chunks that are no longer in render distance
+            let mut i = 0;
+            while i < self.chunks.len() {
+                let chunk = self.chunks.get(i).unwrap();
+                let chunk_coord = Point2::new(chunk.chunk_x, chunk.chunk_z);
+                if !chunks_in_render_distance.contains(&chunk_coord) {
+                    self.chunks.swap_remove(i);
+                } else {
+                    i += 1;
+                    // we want to remove the already existing chunks from the
+                    // set, so we don't have to create them again
+                    chunks_in_render_distance.remove(&chunk_coord);
+                }
+            }
+
             // chunks_in_render_distance
             //     .iter()
             //     .for_each(|chunk| println!("chunk: {:?}", chunk));
 
-            let mut new_chunks: Vec<Chunk> = vec![];
+            // let mut new_chunks: Vec<Chunk> = vec![];
 
             // copy the already existing chunks to the new chunk array
-            while let Some(chunk) = self.chunks.pop() {
-                if let Some(index) = chunks_in_render_distance.iter().position(|chunk_coord| {
-                    chunk.chunk_x == chunk_coord.x && chunk.chunk_z == chunk_coord.y
-                }) {
-                    chunks_in_render_distance.swap_remove(index);
-                    println!(
-                        "copied chunk: Point2 [{:?}, {:?}]",
-                        chunk.chunk_x, chunk.chunk_z
-                    );
-                    new_chunks.push(chunk);
-                }
-            }
+            // while let Some(chunk) = self.chunks.pop() {
+            //     if let Some(index) = chunks_in_render_distance.iter().position(|chunk_coord| {
+            //         chunk.chunk_x == chunk_coord.x && chunk.chunk_z == chunk_coord.y
+            //     }) {
+            //         chunks_in_render_distance.swap_remove(index);
+            //         println!(
+            //             "copied chunk: Point2 [{:?}, {:?}]",
+            //             chunk.chunk_x, chunk.chunk_z
+            //         );
+            //         new_chunks.push(chunk);
+            //     }
+            // }
 
-            // iterate over the remaining chunks (should be the newly rendered ones)
-            chunks_in_render_distance.iter().for_each(|chunk_coord| {
-                let new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
-                new_chunks.push(new_chunk);
-                println!("new_chunk: {:?}", chunk_coord);
-            });
-            self.chunks = new_chunks;
-            for chunk in &mut self.chunks {
-                chunk.update(device, queue);
-            }
-            return true;
+            // iterate over the remaining chunks (should be the newly rendered
+            // ones)
+            self.chunks_to_generate
+                .extend(chunks_in_render_distance.iter());
+
+            // let now = instant::Instant::now();
+            // let dt = now - last_render_time;
+            // last_render_time = now;
+            // chunks_in_render_distance
+            //     .into_iter()
+            //     .for_each(|chunk_coord| {
+            //         let new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
+            //         new_chunks.push(new_chunk);
+            //         println!("new_chunk: {:?}", chunk_coord);
+            //     });
+            // for chunk in &mut self.chunks {
+            //     chunk.update(device, queue);
+            // }
+            updated = true;
         }
-        false
+        let start = instant::Instant::now();
+        let max_time: Duration = Duration::from_millis(50);
+
+        while !self.chunks_to_generate.is_empty() && instant::Instant::now() < start + max_time {
+            // println!("chunks to generate: {:?}", self.chunks_to_generate);
+            let chunk_coord = self.chunks_to_generate.pop_front().unwrap();
+            let mut new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
+            new_chunk.update(device, queue);
+            self.chunks.push(new_chunk);
+            println!("new_chunk: {:?}", chunk_coord);
+        }
+        updated
     }
 }

@@ -500,21 +500,31 @@ impl<'w> State<'w> {
         );
         let updated = self.world.update(self.camera.position, &self.device, &self.queue);
 
-        if updated {
+        // if updated {
             let mut chunk_instances = vec![];
 
             for chunk in self.world.chunks.as_slice() {
-
-				let position = cgmath::Vector3 {
-					x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32), 
-					y: 0.0, 
-					z: ((chunk.chunk_z as f32 - 0.5) * world::CHUNK_SIZE_Z as f32)};
-				let rotation =                         cgmath::Quaternion::from_axis_angle(
-					cgmath::Vector3::unit_z(),
-					cgmath::Deg(0.0),
-				);
-				chunk_instances.push(Instance {position, rotation});
+				if let Some(mesh) = &chunk.mesh {
+					let position = cgmath::Vector3 {
+						x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32), 
+						y: 0.0, 
+						z: ((chunk.chunk_z as f32 - 0.5) * world::CHUNK_SIZE_Z as f32)};
+					let rotation =                         cgmath::Quaternion::from_axis_angle(
+						cgmath::Vector3::unit_z(),
+						cgmath::Deg(0.0),
+					);
+					chunk_instances.push(Instance {position, rotation});
+				}
             }
+				// let position = cgmath::Vector3 {
+				// 	x: 0.0, 
+				// 	y: 0.0, 
+				// 	z: 0.0};
+				// let rotation =                         cgmath::Quaternion::from_axis_angle(
+				// 	cgmath::Vector3::unit_z(),
+				// 	cgmath::Deg(0.0),
+				// );
+				// chunk_instances.push(Instance {position, rotation});
             self.instances = chunk_instances;
 
             let instance_data = self
@@ -529,47 +539,7 @@ impl<'w> State<'w> {
                     contents: bytemuck::cast_slice(&instance_data),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
-        }
-
-        // const NUM_INSTANCES_PER_ROW: u32 = 10;
-        // const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
-        //     NUM_INSTANCES_PER_ROW as f32 * 0.5,
-        //     0.0,
-        //     NUM_INSTANCES_PER_ROW as f32 * 0.5,
-        // );
-        // // frames per degree
-        // let rotation_speed = 2.0;
-        // let instances = (0..NUM_INSTANCES_PER_ROW)
-        //     .flat_map(|z| {
-        //         (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-        //             let position = cgmath::Vector3 {
-        //                 x: x as f32,
-        //                 y: 0.0,
-        //                 z: z as f32,
-        //             } - INSTANCE_DISPLACEMENT;
-
-        //             let rotation = if position.is_zero() {
-        //                 // this is needed so an object at (0, 0, 0) won't get scaled to zero
-        //                 // as Quaternions can affect scale if they're not created correctly
-        //                 cgmath::Quaternion::from_axis_angle(
-        //                     cgmath::Vector3::unit_z(),
-        //                     cgmath::Deg(0.0),
-        //                 )
-        //             } else {
-        //                 // cgmath::Quaternion::from_axis_angle(
-        //                 //     position.normalize(),
-        //                 //     cgmath::Deg((frame as f32) / rotation_speed),
-        //                 // )
-        //                 cgmath::Quaternion::from_angle_y(cgmath::Deg(
-        //                     (frame as f32) / rotation_speed,
-        //                 ))
-        //             };
-
-        //             Instance { position, rotation }
-        //         })
-        //     })
-        //     .collect::<Vec<_>>();
-
+        // }
         self.frame += 1;
     }
 
@@ -638,6 +608,9 @@ impl<'w> State<'w> {
 			// 		render_pass.draw_mesh(&mesh, &self.atlas, &self.camera_bind_group);
 			// 	// }
 			// });
+			// for mesh in meshes {
+			// 	render_pass.draw_mesh(mesh, &self.atlas, &self.camera_bind_group);
+			// }
 			for i in 0..meshes.len() {
 				let mesh = meshes.get(i).unwrap();
 				render_pass.draw_mesh_instanced(mesh, &self.atlas, (i as u32)..(i as u32+1), &self.camera_bind_group);
