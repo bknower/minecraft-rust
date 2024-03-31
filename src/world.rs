@@ -30,9 +30,9 @@ impl Chunk {
         for x in 0usize..CHUNK_SIZE_X {
             for z in 0usize..CHUNK_SIZE_Z {
                 let height_noise = perlin.get([
-                    (x as f64 + 16.0 * chunk_x as f64) / 60000000.0,
-                    (z as f64 + 16.0 * chunk_z as f64) / 60000000.0,
-                ]) * 1000000.0;
+                    (x as f64 + 0.5 + 16.0 * chunk_x as f64),
+                    (z as f64 + 0.5 + 16.0 * chunk_z as f64),
+                ]);
                 // println!("{}, {}, {}", height_noise, x, z);
                 let height = (sea_level + height_noise * height_variability) as usize;
                 for y in 0usize..CHUNK_SIZE_Y {
