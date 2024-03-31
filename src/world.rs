@@ -347,7 +347,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 2;
+        let render_distance = 10;
         let chunks = vec![];
         Self {
             chunks,
