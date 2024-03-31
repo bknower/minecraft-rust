@@ -369,7 +369,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 5;
+        let render_distance = 30;
         let chunks = vec![];
         Self {
             chunks,
@@ -473,7 +473,7 @@ impl World {
         }
         let start = instant::Instant::now();
         let desired_fps = 120;
-        let max_time: Duration = Duration::from_millis(1000 / (2 * desired_fps));
+        let max_time: Duration = Duration::from_millis(1000 / desired_fps);
 
         while !self.chunks_to_generate.is_empty() && instant::Instant::now() < start + max_time {
             // println!("chunks to generate: {:?}", self.chunks_to_generate);
