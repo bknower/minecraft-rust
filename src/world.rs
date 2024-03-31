@@ -243,7 +243,7 @@ impl Chunk {
             indices.append(
                 &mut vert_indices
                     .iter()
-                    .map(|i| (i + starting_length as u32) - 1)
+                    .map(|i| (i + starting_length as u32))
                     .collect(),
             );
         }
@@ -251,17 +251,17 @@ impl Chunk {
         let mut vertices: Vec<ModelVertex> = vec![];
         let mut indices: Vec<u32> = vec![];
 
-        for x in 0..blocks.len() {
-            for y in 0..blocks[0].len() {
-                for z in 0..blocks[0][0].len() {
+        for x in 0..CHUNK_SIZE_X {
+            for y in 0..CHUNK_SIZE_Y {
+                for z in 0..CHUNK_SIZE_Z {
                     let block = blocks[x][y][z];
                     use Block::*;
-                    let left = x == 0 || blocks[x - 1][y][z] == Air;
-                    let right = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
+                    let front = x == 0 || blocks[x - 1][y][z] == Air;
+                    let back = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
                     let down = y == 0 || blocks[x][y - 1][z] == Air;
                     let up = y == CHUNK_SIZE_Y - 1 || blocks[x][y + 1][z] == Air;
-                    let front = z == 0 || blocks[x][y][z - 1] == Air;
-                    let back = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
+                    let left = z == 0 || blocks[x][y][z - 1] == Air;
+                    let right = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
 
                     let atlas_coords = block.get_atlas_coords();
 
@@ -273,8 +273,8 @@ impl Chunk {
                             (right, right_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
                             (down, down_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
                             (up, up_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
-                            (back, back_vertices.as_slice(), vec![1, 0, 3, 3, 0, 2]),
                             (front, front_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
+                            (back, back_vertices.as_slice(), vec![1, 0, 3, 3, 0, 2]),
                         ];
 
                         for (i, (direction, direction_vertices, direction_indices)) in
@@ -288,7 +288,7 @@ impl Chunk {
                                 atlas_coords.get(i).unwrap()
                             };
                             if direction {
-                                let starting_length = vertices.len() + 1;
+                                let starting_length = vertices.len();
                                 vertices.append(&mut add_position_to_vertices(
                                     direction_vertices,
                                     position,
@@ -301,6 +301,8 @@ impl Chunk {
                 }
             }
         }
+
+        // println!("indices: {:?}", indices);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{:?} Vertex Buffer", "block_name")),
@@ -343,7 +345,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 1;
+        let render_distance = 2;
         let chunks = vec![];
         Self {
             chunks,

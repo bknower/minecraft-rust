@@ -506,9 +506,9 @@ impl<'w> State<'w> {
             for chunk in self.world.chunks.as_slice() {
 
 				let position = cgmath::Vector3 {
-					x: (chunk.chunk_x * world::CHUNK_SIZE_X as i32) as f32, 
+					x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32), 
 					y: 0.0, 
-					z: (chunk.chunk_z * world::CHUNK_SIZE_Z as i32) as f32};
+					z: ((chunk.chunk_z as f32 - 0.5) * world::CHUNK_SIZE_Z as f32)};
 				let rotation =                         cgmath::Quaternion::from_axis_angle(
 					cgmath::Vector3::unit_z(),
 					cgmath::Deg(0.0),
