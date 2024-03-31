@@ -37,7 +37,7 @@ impl Chunk {
                 let height = (sea_level + height_noise * height_variability) as usize;
                 for y in 0usize..CHUNK_SIZE_Y {
                     if y < height {
-                        blocks[x][y][z] = Block::Grass;
+                        blocks[x][y][z] = Block::Stone;
                     } else {
                         blocks[x][y][z] = Block::Air;
                     }
@@ -227,10 +227,10 @@ impl Chunk {
                     } = vertex;
                     ModelVertex {
                         position: (p + Vector3::<f32>::from(*position)).into(),
-                        // tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
-                        //     / ATLAS_SIZE as f32)
-                        //     .into(),
-                        tex_coords: *tex_coords,
+                        tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
+                            / ATLAS_SIZE as f32)
+                            .into(),
+                        // tex_coords: *tex_coords,
                         normal: *normal,
                     }
                 })
@@ -258,14 +258,14 @@ impl Chunk {
                     let right = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
                     let down = y == 0 || blocks[x][y - 1][z] == Air;
                     let up = y == CHUNK_SIZE_Y - 1 || blocks[x][y + 1][z] == Air;
-                    let back = z == 0 || blocks[x][y][z - 1] == Air;
-                    let front = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
+                    let front = z == 0 || blocks[x][y][z - 1] == Air;
+                    let back = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
 
                     let atlas_coords = block.get_atlas_coords();
 
                     if let Some(atlas_coords) = atlas_coords {
                         let position = Vector3::new(x as f32, y as f32, z as f32);
-
+                        let texture_length = atlas_coords.len();
                         let face_tuples = vec![
                             (left, left_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
                             (right, right_vertices.as_slice(), vec![0, 2, 1, 1, 2, 3]),
@@ -275,14 +275,22 @@ impl Chunk {
                             (front, front_vertices.as_slice(), vec![0, 1, 2, 2, 1, 3]),
                         ];
 
-                        for face_tuple in face_tuples {
-                            let (direction, direction_vertices, direction_indices) = face_tuple;
+                        for (i, (direction, direction_vertices, direction_indices)) in
+                            face_tuples.into_iter().enumerate()
+                        {
+                            // let face_tuple = face_tuples.get(i).unwrap();
+                            // let (direction, direction_vertices, direction_indices) = face_tuple;
+                            let atlas_coords = if texture_length == 1 {
+                                atlas_coords.first().unwrap()
+                            } else {
+                                atlas_coords.get(i).unwrap()
+                            };
                             if direction {
                                 let starting_length = vertices.len() + 1;
                                 vertices.append(&mut add_position_to_vertices(
                                     direction_vertices,
                                     position,
-                                    atlas_coords,
+                                    *atlas_coords,
                                 ));
                                 add_indices(direction_indices, starting_length, &mut indices);
                             }

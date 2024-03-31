@@ -288,7 +288,7 @@ pub async fn load_block(
             normal,
         },
         // up face
-        ModelVertex { 
+        ModelVertex {
             position: V2,
             tex_coords: [0.0, 0.0],
             normal,
@@ -332,13 +332,12 @@ pub async fn load_block(
     ];
 
     let indices: &[u32] = &[
-        // front
-        0, 1, 2, 2, 1, 3, // back
-        5, 4, 7, 7, 4, 6, // left
-        8, 9, 10, 10, 9, 11, // right
-        12, 14, 13, 13, 14, 15, // up
-        16, 17, 18, 18, 17, 19, // down
-        20, 22, 21, 21, 22, 23,
+        0, 1, 2, 2, 1, 3, // front
+        5, 4, 7, 7, 4, 6, // back
+        8, 9, 10, 10, 9, 11, // left
+        12, 14, 13, 13, 14, 15, // right
+        16, 17, 18, 18, 17, 19, // up
+        20, 22, 21, 21, 22, 23, // down
     ];
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

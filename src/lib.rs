@@ -401,7 +401,7 @@ impl<'w> State<'w> {
 		// vec!["atlas.png"], &device, &queue, &texture_bind_group_layout)
 		// 	.await;
 
-		let atlas_texture = load_texture("stone.png", &device, &queue).await.unwrap();
+		let atlas_texture = load_texture("atlas.png", &device, &queue).await.unwrap();
 		let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
