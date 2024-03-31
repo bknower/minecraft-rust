@@ -20,6 +20,7 @@ pub struct Chunk {
     pub chunk_x: i32,
     pub chunk_z: i32,
     pub blocks: [[[Block; CHUNK_SIZE_Z]; CHUNK_SIZE_Y]; CHUNK_SIZE_X],
+    pub mesh: Option<Mesh>,
 }
 
 impl Chunk {
@@ -48,13 +49,14 @@ impl Chunk {
             chunk_x,
             chunk_z,
             blocks,
+            mesh: None,
         }
     }
 
-    // pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-    //     let mesh = self.to_mesh(&device, &queue);
-    //     self.mesh = Some(mesh);
-    // }
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let mesh = self.to_mesh(&device, &queue);
+        self.mesh = Some(mesh);
+    }
 
     pub fn to_mesh(
         &self,
@@ -406,9 +408,9 @@ impl World {
                 println!("new_chunk: {:?}", chunk_coord);
             });
             self.chunks = new_chunks;
-            // for mut chunk in self.chunks {
-            //     chunk.update(device, queue);
-            // }
+            for chunk in &mut self.chunks {
+                chunk.update(device, queue);
+            }
             return true;
         }
         false

@@ -584,8 +584,15 @@ impl<'w> State<'w> {
                 label: Some("Render Encoder"),
             });
         {
-			let meshes: Vec<Mesh> = self.world.chunks.iter().map(|chunk| chunk.to_mesh(&self.device, &self.queue)).collect();
-			let mesh_refs: Vec<&Mesh> = meshes.iter().map(|mesh| mesh).collect();
+			let mut meshes: Vec<&Mesh> = vec![];
+			for chunk in &self.world.chunks {
+				let mesh = &chunk.mesh;
+				if let Some(mesh) = mesh {
+					meshes.push(mesh);
+				}
+			}
+			// let meshes: Vec<Mesh> = self.world.chunks.iter().map(|chunk| chunk.to_mesh(&self.device, &self.queue)).collect();
+			// let mesh_refs: Vec<&Mesh> = meshes.iter().map(|mesh| mesh).collect();
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -631,8 +638,8 @@ impl<'w> State<'w> {
 			// 		render_pass.draw_mesh(&mesh, &self.atlas, &self.camera_bind_group);
 			// 	// }
 			// });
-			for i in 0..mesh_refs.len() {
-				let mesh = mesh_refs.get(i).unwrap();
+			for i in 0..meshes.len() {
+				let mesh = meshes.get(i).unwrap();
 				render_pass.draw_mesh_instanced(mesh, &self.atlas, (i as u32)..(i as u32+1), &self.camera_bind_group);
 			}
 
