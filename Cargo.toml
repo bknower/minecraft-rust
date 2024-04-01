@@ -16,6 +16,7 @@ instant = "0.1.12"
 log = "0.4.21"
 noise = { version = "0.8.2", features = ["images"] }
 pollster = "0.3.0"
+rayon = "1.10.0"
 tobj = { version = "4.0.1", features = ["async"] }
 wgpu = "0.19.3"
 winit = { version = "0.29.14", features = ["rwh_05"]}
@@ -36,4 +37,7 @@ web-sys = { version = "0.3", features = [
 ]}
 
 [profile.release]
+debug = 1
+
+[profile.dev]
 debug = 1
