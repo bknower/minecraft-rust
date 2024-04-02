@@ -12,7 +12,7 @@ use crate::{
     block::Block,
     model::{Mesh, Model, ModelVertex},
 };
-use wgpu::{util::DeviceExt, Device};
+use wgpu::{naga::FastHashSet, util::DeviceExt, Device};
 
 pub const CHUNK_SIZE_X: usize = 16;
 pub const CHUNK_SIZE_Y: usize = 256;
@@ -26,6 +26,150 @@ pub struct Chunk {
     pub blocks: [[[Block; CHUNK_SIZE_Z]; CHUNK_SIZE_Y]; CHUNK_SIZE_X],
     pub mesh: Option<Mesh>,
 }
+
+enum Side {
+    LEFT,
+    RIGHT,
+    DOWN,
+    UP,
+    BACK,
+    FRONT,
+}
+
+const V0: [f32; 3] = [0.0, 0.0, 0.0];
+const V1: [f32; 3] = [0.0, 0.0, 1.0];
+const V2: [f32; 3] = [0.0, 1.0, 0.0];
+const V3: [f32; 3] = [0.0, 1.0, 1.0];
+const V4: [f32; 3] = [1.0, 0.0, 0.0];
+const V5: [f32; 3] = [1.0, 0.0, 1.0];
+const V6: [f32; 3] = [1.0, 1.0, 0.0];
+const V7: [f32; 3] = [1.0, 1.0, 1.0];
+
+const BOTTOM_LEFT: [f32; 2] = [0.0, 0.0];
+const TOP_LEFT: [f32; 2] = [0.0, 1.0];
+const BOTTOM_RIGHT: [f32; 2] = [1.0, 0.0];
+const TOP_RIGHT: [f32; 2] = [1.0, 1.0];
+
+const LEFT_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V0,
+        tex_coords: BOTTOM_RIGHT,
+    },
+    ModelVertex {
+        position: V2,
+        tex_coords: TOP_RIGHT,
+    },
+    ModelVertex {
+        position: V4,
+        tex_coords: BOTTOM_LEFT,
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: TOP_LEFT,
+    },
+];
+
+const RIGHT_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V1,
+        tex_coords: BOTTOM_LEFT,
+    },
+    ModelVertex {
+        position: V3,
+        tex_coords: TOP_LEFT,
+    },
+    ModelVertex {
+        position: V5,
+        tex_coords: BOTTOM_RIGHT,
+    },
+    ModelVertex {
+        position: V7,
+        tex_coords: TOP_RIGHT,
+    },
+];
+
+const DOWN_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V0,
+        tex_coords: TOP_LEFT,
+    },
+    ModelVertex {
+        position: V1,
+        tex_coords: TOP_RIGHT,
+    },
+    ModelVertex {
+        position: V4,
+        tex_coords: BOTTOM_LEFT,
+    },
+    ModelVertex {
+        position: V5,
+        tex_coords: BOTTOM_RIGHT,
+    },
+];
+
+const UP_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V2,
+        tex_coords: BOTTOM_LEFT,
+    },
+    ModelVertex {
+        position: V3,
+        tex_coords: TOP_LEFT,
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: BOTTOM_RIGHT,
+    },
+    ModelVertex {
+        position: V7,
+        tex_coords: TOP_RIGHT,
+    },
+];
+
+const BACK_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V4,
+        tex_coords: BOTTOM_RIGHT,
+    },
+    ModelVertex {
+        position: V5,
+        tex_coords: BOTTOM_LEFT,
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: TOP_RIGHT,
+    },
+    ModelVertex {
+        position: V7,
+        tex_coords: TOP_LEFT,
+    },
+];
+
+const FRONT_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V0,
+        tex_coords: BOTTOM_LEFT,
+    },
+    ModelVertex {
+        position: V1,
+        tex_coords: BOTTOM_RIGHT,
+    },
+    ModelVertex {
+        position: V2,
+        tex_coords: TOP_LEFT,
+    },
+    ModelVertex {
+        position: V3,
+        tex_coords: TOP_RIGHT,
+    },
+];
+
+const LEFT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+const RIGHT_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
+const DOWN_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
+const UP_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+const FRONT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
 
 impl Chunk {
     fn new(chunk_x: i32, chunk_z: i32, perlin: Perlin) -> Self {
@@ -72,165 +216,11 @@ impl Chunk {
     ) -> Mesh {
         let blocks = self.blocks;
 
-        let normal: [f32; 3] = [0.0, 0.0, 0.0];
-        const V0: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
-        const V1: Vector3<f32> = Vector3::new(0.0, 0.0, 1.0);
-        const V2: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
-        const V3: Vector3<f32> = Vector3::new(0.0, 1.0, 1.0);
-        const V4: Vector3<f32> = Vector3::new(1.0, 0.0, 0.0);
-        const V5: Vector3<f32> = Vector3::new(1.0, 0.0, 1.0);
-        const V6: Vector3<f32> = Vector3::new(1.0, 1.0, 0.0);
-        const V7: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0);
-
-        let left_vertices = [
-            ModelVertex {
-                position: V0.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V2.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V4.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V6.into(),
-                tex_coords: [0.0, 1.0],
-                normal,
-            },
-        ];
-
-        let right_vertices = [
-            ModelVertex {
-                position: V1.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V3.into(),
-                tex_coords: [0.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V5.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V7.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-        ];
-
-        let down_vertices = [
-            ModelVertex {
-                position: V0.into(),
-                tex_coords: [0.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V1.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V4.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V5.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-        ];
-
-        let up_vertices = [
-            ModelVertex {
-                position: V2.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V3.into(),
-                tex_coords: [0.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V6.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V7.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-        ];
-
-        let back_vertices = [
-            ModelVertex {
-                position: V4.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V5.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V6.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V7.into(),
-                tex_coords: [0.0, 1.0],
-                normal,
-            },
-        ];
-
-        let front_vertices = [
-            ModelVertex {
-                position: V0.into(),
-                tex_coords: [0.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V1.into(),
-                tex_coords: [1.0, 0.0],
-                normal,
-            },
-            ModelVertex {
-                position: V2.into(),
-                tex_coords: [0.0, 1.0],
-                normal,
-            },
-            ModelVertex {
-                position: V3.into(),
-                tex_coords: [1.0, 1.0],
-                normal,
-            },
-        ];
-
-        let left_indices = [0, 1, 2, 2, 1, 3];
-        let right_indices = [0, 2, 1, 1, 2, 3];
-        let down_indices = [0, 2, 1, 1, 2, 3];
-        let up_indices = [0, 1, 2, 2, 1, 3];
-        let front_indices = [0, 1, 2, 2, 1, 3];
-        let back_indices = [1, 0, 3, 3, 0, 2];
-
-        fn add_position_to_vertices(
-            verts: &[ModelVertex],
-            p: Vector3<f32>,
-            atlas_coords: Vector2<f32>,
+        fn add_position_and_scale_to_vertices(
+            verts: [ModelVertex; 4],
+            start_coords: [f32; 3],
+            scale: [f32; 3],
+            atlas_coords: [f32; 2],
         ) -> Vec<ModelVertex> {
             verts
                 .iter()
@@ -238,15 +228,18 @@ impl Chunk {
                     let ModelVertex {
                         position,
                         tex_coords,
-                        normal,
+                        // normal,
                     } = vertex;
                     ModelVertex {
-                        position: (p + Vector3::<f32>::from(*position)).into(),
-                        tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
-                            / ATLAS_SIZE as f32)
-                            .into(),
-                        // tex_coords: *tex_coords,
-                        normal: *normal,
+                        position: [
+                            start_coords[0] + position[0] * scale[0],
+                            start_coords[1] + position[1] * scale[1],
+                            start_coords[2] + position[2] * scale[2],
+                        ],
+                        tex_coords: [
+                            (atlas_coords[0] + tex_coords[0]) / ATLAS_SIZE as f32,
+                            (atlas_coords[1] + tex_coords[1]) / ATLAS_SIZE as f32,
+                        ],
                     }
                 })
                 .collect()
@@ -261,62 +254,154 @@ impl Chunk {
             );
         }
 
+        fn add_combined_mesh(
+            block: Block,
+            start_coords: (usize, usize, usize),
+            scale: (usize, usize, usize),
+            indices: &mut Vec<u32>,
+            vertices: &mut Vec<ModelVertex>,
+        ) {
+            let atlas_coords = block.get_atlas_coords();
+            let (start_x, start_y, start_z) = start_coords;
+            let (scale_x, scale_y, scale_z) = scale;
+
+            if let Some(atlas_coords) = atlas_coords {
+                let position = [start_x as f32, start_y as f32, start_z as f32];
+                let texture_length = atlas_coords.len();
+                let face_tuples = [
+                    (LEFT_VERTICES, LEFT_INDICES),
+                    (RIGHT_VERTICES, RIGHT_INDICES),
+                    (DOWN_VERTICES, DOWN_INDICES),
+                    (UP_VERTICES, UP_INDICES),
+                    (FRONT_VERTICES, FRONT_INDICES),
+                    (BACK_VERTICES, BACK_INDICES),
+                ];
+
+                for (i, (direction_vertices, direction_indices)) in
+                    face_tuples.into_iter().enumerate()
+                {
+                    let atlas_coords = atlas_coords.get(i).unwrap();
+
+                    let starting_length = vertices.len();
+                    vertices.append(&mut add_position_and_scale_to_vertices(
+                        direction_vertices,
+                        position,
+                        [scale_x as f32, scale_y as f32, scale_z as f32],
+                        *atlas_coords,
+                    ));
+                    add_indices(direction_indices, starting_length, indices);
+                }
+            }
+        }
+
         // a chunk is 16  * 16 * 256 blocks
         let mut vertices: Vec<ModelVertex> = Vec::with_capacity(50000);
         let mut indices: Vec<u32> = Vec::with_capacity(68000);
 
-        for x in 0..CHUNK_SIZE_X {
-            for y in 0..CHUNK_SIZE_Y {
-                for z in 0..CHUNK_SIZE_Z {
-                    let block = blocks[x][y][z];
-                    use Block::*;
-                    let front = x == 0 || blocks[x - 1][y][z] == Air;
-                    let back = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
-                    let down = y == 0 || blocks[x][y - 1][z] == Air;
-                    let up = y == CHUNK_SIZE_Y - 1 || blocks[x][y + 1][z] == Air;
-                    let left = z == 0 || blocks[x][y][z - 1] == Air;
-                    let right = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
+        // greedy meshing
+        let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
+            .flat_map(|x| {
+                (0..CHUNK_SIZE_Y).flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
+            })
+            .collect();
+        let mut coord_set = FastHashSet::from_iter(coord_vec.clone());
 
-                    let atlas_coords = block.get_atlas_coords();
-
-                    if let Some(atlas_coords) = atlas_coords {
-                        // let chunk_position =
-                        // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
-                        let position = Vector3::new(x as f32, y as f32, z as f32);
-                        let texture_length = atlas_coords.len();
-                        let face_tuples = [
-                            (left, left_vertices.as_slice(), left_indices),
-                            (right, right_vertices.as_slice(), right_indices),
-                            (down, down_vertices.as_slice(), down_indices),
-                            (up, up_vertices.as_slice(), up_indices),
-                            (front, front_vertices.as_slice(), front_indices),
-                            (back, back_vertices.as_slice(), back_indices),
-                        ];
-
-                        for (i, (direction, direction_vertices, direction_indices)) in
-                            face_tuples.into_iter().enumerate()
-                        {
-                            // let face_tuple = face_tuples.get(i).unwrap();
-                            // let (direction, direction_vertices, direction_indices) = face_tuple;
-                            let atlas_coords = if texture_length == 1 {
-                                atlas_coords.first().unwrap()
-                            } else {
-                                atlas_coords.get(i).unwrap()
-                            };
-                            if direction {
-                                let starting_length = vertices.len();
-                                vertices.append(&mut add_position_to_vertices(
-                                    direction_vertices,
-                                    position,
-                                    *atlas_coords,
-                                ));
-                                add_indices(direction_indices, starting_length, &mut indices);
+        for coords in coord_vec {
+            let (start_x, start_y, start_z) = coords;
+            let (mut end_x, mut end_y, mut end_z) = (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
+            if coord_set.contains(&coords) {
+                let start_block = blocks[start_x][start_y][start_z];
+                for x in (start_x + 1)..end_x {
+                    let curr_block = blocks[x][start_y][start_z];
+                    coord_set.remove(&(x, start_y, start_z));
+                    if start_block != curr_block {
+                        end_x = x;
+                        break;
+                    }
+                }
+                for x in start_x..end_x {
+                    for y in (start_y + 1)..end_y {
+                        let curr_block = blocks[x][y][start_z];
+                        coord_set.remove(&(x, y, start_z));
+                        if start_block != curr_block {
+                            end_y = y;
+                            break;
+                        }
+                    }
+                }
+                for x in start_x..end_x {
+                    for y in start_y..end_y {
+                        for z in (start_z + 1)..end_z {
+                            let curr_block = blocks[x][y][z];
+                            coord_set.remove(&(x, y, z));
+                            if start_block != curr_block {
+                                end_z = z;
+                                break;
                             }
                         }
                     }
                 }
+
+                let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
+
+                // add largest mesh possible
+                add_combined_mesh(start_block, coords, scale, &mut indices, &mut vertices);
             }
         }
+
+        // naive meshing
+        // for x in 0..CHUNK_SIZE_X {
+        //     for y in 0..CHUNK_SIZE_Y {
+        //         for z in 0..CHUNK_SIZE_Z {
+        //             let block = blocks[x][y][z];
+        //             use Block::*;
+        //             let front = x == 0 || blocks[x - 1][y][z] == Air;
+        //             let back = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
+        //             let down = y == 0 || blocks[x][y - 1][z] == Air;
+        //             let up = y == CHUNK_SIZE_Y - 1 || blocks[x][y + 1][z] == Air;
+        //             let left = z == 0 || blocks[x][y][z - 1] == Air;
+        //             let right = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
+        //             // let (front, back, down, up, left, right) = (true, true, true, true, true, true);
+        //             let atlas_coords = block.get_atlas_coords();
+
+        //             if let Some(atlas_coords) = atlas_coords {
+        //                 // let chunk_position =
+        //                 // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
+        //                 let position = [x as f32, y as f32, z as f32];
+        //                 let texture_length = atlas_coords.len();
+        //                 let face_tuples = [
+        //                     (left, LEFT_VERTICES, LEFT_INDICES),
+        //                     (right, RIGHT_VERTICES, RIGHT_INDICES),
+        //                     (down, DOWN_VERTICES, DOWN_INDICES),
+        //                     (up, UP_VERTICES, UP_INDICES),
+        //                     (front, FRONT_VERTICES, FRONT_INDICES),
+        //                     (back, BACK_VERTICES, BACK_INDICES),
+        //                 ];
+
+        //                 for (i, (direction, direction_vertices, direction_indices)) in
+        //                     face_tuples.into_iter().enumerate()
+        //                 {
+        //                     // let face_tuple = face_tuples.get(i).unwrap();
+        //                     // let (direction, direction_vertices, direction_indices) = face_tuple;
+        //                     let atlas_coords = if texture_length == 1 {
+        //                         atlas_coords.first().unwrap()
+        //                     } else {
+        //                         atlas_coords.get(i).unwrap()
+        //                     };
+        //                     if direction {
+        //                         let starting_length = vertices.len();
+        //                         vertices.append(&mut add_position_to_vertices(
+        //                             direction_vertices,
+        //                             position,
+        //                             *atlas_coords,
+        //                         ));
+        //                         add_indices(direction_indices, starting_length, &mut indices);
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         // println!("indices: {:?}", indices);
 
@@ -348,6 +433,7 @@ impl Chunk {
         mesh
     }
 }
+
 pub struct World {
     // chunks: Vec<Vec<Chunk>>,
     pub chunks: Vec<Chunk>,
@@ -369,7 +455,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 30;
+        let render_distance = 5;
         let chunks = vec![];
         Self {
             chunks,

@@ -129,11 +129,11 @@ pub async fn load_model(
                         m.mesh.positions[i * 3 + 2],
                     ],
                     tex_coords: [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]],
-                    normal: [
-                        m.mesh.normals[i * 3],
-                        m.mesh.normals[i * 3 + 1],
-                        m.mesh.normals[i * 3 + 2],
-                    ],
+                    // normal: [
+                    //     m.mesh.normals[i * 3],
+                    //     m.mesh.normals[i * 3 + 1],
+                    //     m.mesh.normals[i * 3 + 2],
+                    // ],
                 })
                 .collect::<Vec<_>>();
 
@@ -161,205 +161,205 @@ pub async fn load_model(
     Ok(model::Model { meshes, materials })
 }
 
-pub async fn load_block(
-    block_name: &str,
-    face_textures: Vec<&str>,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-) -> model::Model {
-    let mut materials = Vec::new();
-    for t in face_textures {
-        let diffuse_texture = load_texture(t, device, queue).await.unwrap();
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: None,
-        });
-
-        materials.push(model::Material {
-            name: t.to_string(),
-            diffuse_texture,
-            bind_group,
-        })
-    }
-
-    let normal: [f32; 3] = [0.0, 0.0, 0.0];
-    const V0: [f32; 3] = [0.0, 0.0, 0.0];
-    const V1: [f32; 3] = [0.0, 0.0, 1.0];
-    const V2: [f32; 3] = [0.0, 1.0, 0.0];
-    const V3: [f32; 3] = [0.0, 1.0, 1.0];
-    const V4: [f32; 3] = [1.0, 0.0, 0.0];
-    const V5: [f32; 3] = [1.0, 0.0, 1.0];
-    const V6: [f32; 3] = [1.0, 1.0, 0.0];
-    const V7: [f32; 3] = [1.0, 1.0, 1.0];
-    let vertices: Vec<ModelVertex> = vec![
-        // front face
-        ModelVertex {
-            position: V0,
-            tex_coords: [0.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V1,
-            tex_coords: [1.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V2,
-            tex_coords: [0.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V3,
-            tex_coords: [1.0, 1.0],
-            normal,
-        },
-        // back face
-        ModelVertex {
-            position: V4,
-            tex_coords: [1.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V5,
-            tex_coords: [0.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V6,
-            tex_coords: [1.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V7,
-            tex_coords: [0.0, 1.0],
-            normal,
-        },
-        // left face
-        ModelVertex {
-            position: V0,
-            tex_coords: [1.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V2,
-            tex_coords: [1.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V4,
-            tex_coords: [0.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V6,
-            tex_coords: [0.0, 1.0],
-            normal,
-        },
-        // right face
-        ModelVertex {
-            position: V1,
-            tex_coords: [0.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V3,
-            tex_coords: [0.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V5,
-            tex_coords: [1.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V7,
-            tex_coords: [1.0, 1.0],
-            normal,
-        },
-        // up face
-        ModelVertex {
-            position: V2,
-            tex_coords: [0.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V3,
-            tex_coords: [0.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V6,
-            tex_coords: [1.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V7,
-            tex_coords: [1.0, 1.0],
-            normal,
-        },
-        // down face
-        ModelVertex {
-            position: V0,
-            tex_coords: [0.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V1,
-            tex_coords: [1.0, 1.0],
-            normal,
-        },
-        ModelVertex {
-            position: V4,
-            tex_coords: [0.0, 0.0],
-            normal,
-        },
-        ModelVertex {
-            position: V5,
-            tex_coords: [1.0, 0.0],
-            normal,
-        },
-    ];
-
-    let indices: &[u32] = &[
-        0, 1, 2, 2, 1, 3, // front
-        5, 4, 7, 7, 4, 6, // back
-        8, 9, 10, 10, 9, 11, // left
-        12, 14, 13, 13, 14, 15, // right
-        16, 17, 18, 18, 17, 19, // up
-        20, 22, 21, 21, 22, 23, // down
-    ];
-
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some(&format!("{:?} Vertex Buffer", block_name)),
-        contents: bytemuck::cast_slice(&vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some(&format!("{:?} Index Buffer", block_name)),
-        contents: bytemuck::cast_slice(indices),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-
-    let mesh = model::Mesh {
-        name: block_name.to_string(),
-        vertex_buffer,
-        index_buffer,
-        num_elements: indices.len() as u32,
-        material: 0,
-    };
-    model::Model {
-        meshes: vec![mesh],
-        materials,
-    }
-}
+// pub async fn load_block(
+//     block_name: &str,
+//     face_textures: Vec<&str>,
+//     device: &wgpu::Device,
+//     queue: &wgpu::Queue,
+//     layout: &wgpu::BindGroupLayout,
+// ) -> model::Model {
+//     let mut materials = Vec::new();
+//     for t in face_textures {
+//         let diffuse_texture = load_texture(t, device, queue).await.unwrap();
+//         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+//             layout,
+//             entries: &[
+//                 wgpu::BindGroupEntry {
+//                     binding: 0,
+//                     resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+//                 },
+//                 wgpu::BindGroupEntry {
+//                     binding: 1,
+//                     resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+//                 },
+//             ],
+//             label: None,
+//         });
+//
+//         materials.push(model::Material {
+//             name: t.to_string(),
+//             diffuse_texture,
+//             bind_group,
+//         })
+//     }
+//
+//     let normal: [f32; 3] = [0.0, 0.0, 0.0];
+//     const V0: [f32; 3] = [0.0, 0.0, 0.0];
+//     const V1: [f32; 3] = [0.0, 0.0, 1.0];
+//     const V2: [f32; 3] = [0.0, 1.0, 0.0];
+//     const V3: [f32; 3] = [0.0, 1.0, 1.0];
+//     const V4: [f32; 3] = [1.0, 0.0, 0.0];
+//     const V5: [f32; 3] = [1.0, 0.0, 1.0];
+//     const V6: [f32; 3] = [1.0, 1.0, 0.0];
+//     const V7: [f32; 3] = [1.0, 1.0, 1.0];
+//     let vertices: Vec<ModelVertex> = vec![
+//         // front face
+//         ModelVertex {
+//             position: V0,
+//             tex_coords: [0.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V1,
+//             tex_coords: [1.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V2,
+//             tex_coords: [0.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V3,
+//             tex_coords: [1.0, 1.0],
+//             normal,
+//         },
+//         // back face
+//         ModelVertex {
+//             position: V4,
+//             tex_coords: [1.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V5,
+//             tex_coords: [0.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V6,
+//             tex_coords: [1.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V7,
+//             tex_coords: [0.0, 1.0],
+//             normal,
+//         },
+//         // left face
+//         ModelVertex {
+//             position: V0,
+//             tex_coords: [1.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V2,
+//             tex_coords: [1.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V4,
+//             tex_coords: [0.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V6,
+//             tex_coords: [0.0, 1.0],
+//             normal,
+//         },
+//         // right face
+//         ModelVertex {
+//             position: V1,
+//             tex_coords: [0.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V3,
+//             tex_coords: [0.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V5,
+//             tex_coords: [1.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V7,
+//             tex_coords: [1.0, 1.0],
+//             normal,
+//         },
+//         // up face
+//         ModelVertex {
+//             position: V2,
+//             tex_coords: [0.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V3,
+//             tex_coords: [0.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V6,
+//             tex_coords: [1.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V7,
+//             tex_coords: [1.0, 1.0],
+//             normal,
+//         },
+//         // down face
+//         ModelVertex {
+//             position: V0,
+//             tex_coords: [0.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V1,
+//             tex_coords: [1.0, 1.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V4,
+//             tex_coords: [0.0, 0.0],
+//             normal,
+//         },
+//         ModelVertex {
+//             position: V5,
+//             tex_coords: [1.0, 0.0],
+//             normal,
+//         },
+//     ];
+//
+//     let indices: &[u32] = &[
+//         0, 1, 2, 2, 1, 3, // front
+//         5, 4, 7, 7, 4, 6, // back
+//         8, 9, 10, 10, 9, 11, // left
+//         12, 14, 13, 13, 14, 15, // right
+//         16, 17, 18, 18, 17, 19, // up
+//         20, 22, 21, 21, 22, 23, // down
+//     ];
+//
+//     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//         label: Some(&format!("{:?} Vertex Buffer", block_name)),
+//         contents: bytemuck::cast_slice(&vertices),
+//         usage: wgpu::BufferUsages::VERTEX,
+//     });
+//     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//         label: Some(&format!("{:?} Index Buffer", block_name)),
+//         contents: bytemuck::cast_slice(indices),
+//         usage: wgpu::BufferUsages::INDEX,
+//     });
+//
+//     let mesh = model::Mesh {
+//         name: block_name.to_string(),
+//         vertex_buffer,
+//         index_buffer,
+//         num_elements: indices.len() as u32,
+//         material: 0,
+//     };
+//     model::Model {
+//         meshes: vec![mesh],
+//         materials,
+//     }
+// }

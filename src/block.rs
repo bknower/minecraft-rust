@@ -14,18 +14,24 @@ pub enum Block {
 }
 
 impl Block {
-    pub fn get_atlas_coords(self) -> Option<Vec<Vector2<f32>>> {
+    pub fn get_atlas_coords(self) -> Option<[[f32; 2]; 6]> {
         match self {
-            Block::Stone => Some(vec![
-                // [19.0, 6.0].into(),
-                [22.0, 0.0].into(),
-                [22.0, 1.0].into(),
-                [22.0, 2.0].into(),
-                [22.0, 3.0].into(),
-                [22.0, 4.0].into(),
-                [22.0, 5.0].into(),
+            Block::Stone => Some([
+                [22.0, 0.0],
+                [22.0, 1.0],
+                [22.0, 2.0],
+                [22.0, 3.0],
+                [22.0, 4.0],
+                [22.0, 5.0],
             ]),
-            Block::Grass => Some(vec![[1.0, 10.0].into()]),
+            Block::Grass => Some([
+                [1.0, 10.0],
+                [1.0, 10.0],
+                [1.0, 10.0],
+                [1.0, 10.0],
+                [1.0, 10.0],
+                [1.0, 10.0],
+            ]),
             _ => None,
         }
     }
