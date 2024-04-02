@@ -262,10 +262,16 @@ impl Chunk {
             indices: &mut Vec<u32>,
             vertices: &mut Vec<ModelVertex>,
         ) {
-            // println!(
-            //     "adding combined mesh from  {:?} with scale: {:?}",
-            //     start_coords, scale
-            // );
+            println!(
+                "adding combined mesh from {:?} to {:?} with scale: {:?}",
+                start_coords,
+                (
+                    start_coords.0 + scale.0,
+                    start_coords.1 + scale.1,
+                    start_coords.2 + scale.2
+                ),
+                scale
+            );
             let atlas_coords = block.get_atlas_coords();
             let (start_x, start_y, start_z) = start_coords;
             let (scale_x, scale_y, scale_z) = scale;
@@ -329,6 +335,9 @@ impl Chunk {
 
         // greedy meshing
 
+        // the problem is that we don't recheck the ranges while growing, so
+        // they could maybe grow into the other ranges
+
         let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
             .flat_map(|x| {
                 (0..CHUNK_SIZE_Y).flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
@@ -389,9 +398,46 @@ impl Chunk {
                             }
                         }
                     }
-                    let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
 
-                    // add largest mesh possible
+                    let mut adjusted_end_x = end_x;
+                    let mut adjusted_end_y = end_y;
+                    let mut adjusted_end_z = end_z;
+
+                    // Check if the grown mesh overlaps with any existing ranges
+                    for range in &ranges {
+                        let &(
+                            range_x_start,
+                            range_y_start,
+                            range_z_start,
+                            range_x_size,
+                            range_y_size,
+                            range_z_size,
+                        ) = range;
+                        if end_x > range_x_start
+                            && start_x < range_x_start + range_x_size
+                            && end_y > range_y_start
+                            && start_y < range_y_start + range_y_size
+                            && end_z > range_z_start
+                            && start_z < range_z_start + range_z_size
+                        {
+                            // Adjust the mesh dimensions to avoid the overlap
+                            adjusted_end_x = adjusted_end_x.min(range_x_start);
+                            adjusted_end_y = adjusted_end_y.min(range_y_start);
+                            adjusted_end_z = adjusted_end_z.min(range_z_start);
+                        }
+                    }
+
+                    // Ensure that the adjusted end coordinates are greater than or equal to the start coordinates
+                    adjusted_end_x = adjusted_end_x.max(start_x);
+                    adjusted_end_y = adjusted_end_y.max(start_y);
+                    adjusted_end_z = adjusted_end_z.max(start_z);
+
+                    let scale = (
+                        adjusted_end_x - start_x,
+                        adjusted_end_y - start_y,
+                        adjusted_end_z - start_z,
+                    );
+                    // add adjusted mesh
                     add_combined_mesh(start_block, coords, scale, &mut indices, &mut vertices);
                     ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                 }
