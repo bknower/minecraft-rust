@@ -420,66 +420,7 @@ impl Chunk {
                         }
                     }
 
-                    // 'outer: for z in (start_z + 1)..end_z {
-                    //     for x in start_x..end_x {
-                    //         let curr_block = blocks[x][start_y][z];
-                    //         if start_block != curr_block {
-                    //             end_z = z;
-                    //             break 'outer;
-                    //         }
-                    //     }
-                    // }
-
-                    // 'outer: for y in (start_y + 1)..end_y {
-                    //     for x in start_x..end_x {
-                    //         for z in start_z..end_z {
-                    //             let curr_block = blocks[x][y][z];
-                    //             if start_block != curr_block {
-                    //                 end_y = y;
-                    //                 break 'outer;
-                    //             }
-                    //         }
-                    //     }
-                    // }
-
-                    let mut adjusted_end_x = end_x;
-                    let mut adjusted_end_y = end_y;
-                    let mut adjusted_end_z = end_z;
-
-                    // Check if the grown mesh overlaps with any existing ranges
-                    // for range in &ranges {
-                    //     let &(
-                    //         range_x_start,
-                    //         range_y_start,
-                    //         range_z_start,
-                    //         range_x_size,
-                    //         range_y_size,
-                    //         range_z_size,
-                    //     ) = range;
-                    //     if end_x > range_x_start
-                    //         && end_x < range_x_start + range_x_size
-                    //         && end_y > range_y_start
-                    //         && end_y < range_y_start + range_y_size
-                    //         && end_z > range_z_start
-                    //         && end_z < range_z_start + range_z_size
-                    //     {
-                    //         // Adjust the mesh dimensions to avoid the overlap
-                    //         adjusted_end_x = adjusted_end_x.min(range_x_start - 1);
-                    //         adjusted_end_y = adjusted_end_y.min(range_y_start - 1);
-                    //         adjusted_end_z = adjusted_end_z.min(range_z_start - 1);
-                    //     }
-                    // }
-
-                    // Ensure that the adjusted end coordinates are greater than or equal to the start coordinates
-                    // adjusted_end_x = adjusted_end_x.max(start_x);
-                    // adjusted_end_y = adjusted_end_y.max(start_y);
-                    // adjusted_end_z = adjusted_end_z.max(start_z);
-
-                    let scale = (
-                        adjusted_end_x - start_x,
-                        adjusted_end_y - start_y,
-                        adjusted_end_z - start_z,
-                    );
+                    let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
                     // add adjusted mesh
                     add_combined_mesh(start_block, coords, scale, &mut indices, &mut vertices);
                     ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
