@@ -373,13 +373,13 @@ impl Chunk {
                     start_z >= range_z_start,
                 );
                 if !after_start_x {
-                    end_x = end_x.min(range_x_start);
+                    end_x = range_x_start;
                 }
                 if !after_start_y {
-                    end_y = end_y.min(range_y_start);
+                    end_y = range_y_start;
                 }
                 if !after_start_z {
-                    end_z = end_z.min(range_z_start);
+                    end_z = range_z_start;
                 }
                 after_start_x
                     && start_x < range_x_end
