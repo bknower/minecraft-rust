@@ -298,23 +298,34 @@ impl Chunk {
                 }
             }
         }
+        fn add_position_to_vertices(
+            verts: &[ModelVertex],
+            p: Vector3<f32>,
+            atlas_coords: Vector2<f32>,
+        ) -> Vec<ModelVertex> {
+            verts
+                .iter()
+                .map(|vertex| {
+                    let ModelVertex {
+                        position,
+                        tex_coords,
+                        // normal,
+                    } = vertex;
+                    ModelVertex {
+                        position: (p + Vector3::<f32>::from(*position)).into(),
+                        tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
+                            / ATLAS_SIZE as f32)
+                            .into(),
+                        // tex_coords: *tex_coords,
+                        // normal: *normal,
+                    }
+                })
+                .collect()
+        }
 
         // a chunk is 16  * 16 * 256 blocks
         let mut vertices: Vec<ModelVertex> = vec![];
         let mut indices: Vec<u32> = vec![];
-
-        // x is 4 bits, y is 8, z is 4
-        fn coords_to_int(coords: &(usize, usize, usize)) -> u16 {
-            let (x, y, z) = coords;
-            (z | (y << 4) | (x << 12)) as u16
-        }
-
-        fn int_to_coords(i: u16) -> (usize, usize, usize) {
-            let x = (0xf000 & i) >> 12;
-            let y = (0x0ff0 & i) >> 4;
-            let z = 0x000f & i;
-            (x as usize, y as usize, z as usize)
-        }
 
         // greedy meshing
 
@@ -333,7 +344,7 @@ impl Chunk {
 
             // if this block is not in any of the existing ranges
             if !ranges.iter().any(|range| {
-                let (
+                let &(
                     range_x_start,
                     range_y_start,
                     range_z_start,
@@ -341,8 +352,11 @@ impl Chunk {
                     range_y_size,
                     range_z_size,
                 ) = range;
-                start_x < range_x_start + range_x_size
+                start_x >= range_x_start
+                    && start_x < range_x_start + range_x_size
+                    && start_y >= range_y_start
                     && start_y < range_y_start + range_y_size
+                    && start_z >= range_z_start
                     && start_z < range_z_start + range_z_size
             }) {
                 let start_block = blocks[start_x][start_y][start_z];
@@ -354,22 +368,23 @@ impl Chunk {
                             break;
                         }
                     }
-                    for x in start_x..end_x {
-                        for y in (start_y + 1)..end_y {
-                            let curr_block = blocks[x][y][start_z];
+                    'outer: for z in (start_z + 1)..end_z {
+                        for x in start_x..end_x {
+                            let curr_block = blocks[x][start_y][z];
                             if start_block != curr_block {
-                                end_y = y;
-                                break;
+                                end_z = z;
+                                break 'outer;
                             }
                         }
                     }
-                    for x in start_x..end_x {
-                        for y in start_y..end_y {
-                            for z in (start_z + 1)..end_z {
+
+                    'outer: for y in (start_y + 1)..end_y {
+                        for x in start_x..end_x {
+                            for z in start_z..end_z {
                                 let curr_block = blocks[x][y][z];
                                 if start_block != curr_block {
-                                    end_z = z;
-                                    break;
+                                    end_y = y;
+                                    break 'outer;
                                 }
                             }
                         }
@@ -425,9 +440,9 @@ impl Chunk {
         //                     if direction {
         //                         let starting_length = vertices.len();
         //                         vertices.append(&mut add_position_to_vertices(
-        //                             direction_vertices,
-        //                             position,
-        //                             *atlas_coords,
+        //                             &direction_vertices,
+        //                             position.into(),
+        //                             (*atlas_coords).into(),
         //                         ));
         //                         add_indices(direction_indices, starting_length, &mut indices);
         //                     }
@@ -489,7 +504,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 20;
+        let render_distance = 5;
         let chunks = vec![];
         Self {
             chunks,
