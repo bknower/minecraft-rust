@@ -262,7 +262,7 @@ impl<'w> State<'w> {
         let camera = camera::Camera::new((0.0, 120.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
-        let camera_controller = camera::CameraController::new(200.0, 0.4);
+        let camera_controller = camera::CameraController::new(30.0, 0.4);
         // in new() after creating `camera`
 
         let mut camera_uniform = CameraUniform::new();

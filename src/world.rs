@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    hash::Hash,
     mem::size_of,
 };
 
@@ -261,6 +262,10 @@ impl Chunk {
             indices: &mut Vec<u32>,
             vertices: &mut Vec<ModelVertex>,
         ) {
+            // println!(
+            //     "adding combined mesh from  {:?} with scale: {:?}",
+            //     start_coords, scale
+            // );
             let atlas_coords = block.get_atlas_coords();
             let (start_x, start_y, start_z) = start_coords;
             let (scale_x, scale_y, scale_z) = scale;
@@ -295,57 +300,86 @@ impl Chunk {
         }
 
         // a chunk is 16  * 16 * 256 blocks
-        let mut vertices: Vec<ModelVertex> = Vec::with_capacity(50000);
-        let mut indices: Vec<u32> = Vec::with_capacity(68000);
+        let mut vertices: Vec<ModelVertex> = vec![];
+        let mut indices: Vec<u32> = vec![];
+
+        // x is 4 bits, y is 8, z is 4
+        fn coords_to_int(coords: &(usize, usize, usize)) -> u16 {
+            let (x, y, z) = coords;
+            (z | (y << 4) | (x << 12)) as u16
+        }
+
+        fn int_to_coords(i: u16) -> (usize, usize, usize) {
+            let x = (0xf000 & i) >> 12;
+            let y = (0x0ff0 & i) >> 4;
+            let z = 0x000f & i;
+            (x as usize, y as usize, z as usize)
+        }
 
         // greedy meshing
+
         let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
             .flat_map(|x| {
                 (0..CHUNK_SIZE_Y).flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
             })
             .collect();
-        let mut coord_set = FastHashSet::from_iter(coord_vec.clone());
+
+        let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
 
         for coords in coord_vec {
+            use Block::*;
             let (start_x, start_y, start_z) = coords;
             let (mut end_x, mut end_y, mut end_z) = (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
-            if coord_set.contains(&coords) {
+
+            // if this block is not in any of the existing ranges
+            if !ranges.iter().any(|range| {
+                let (
+                    range_x_start,
+                    range_y_start,
+                    range_z_start,
+                    range_x_size,
+                    range_y_size,
+                    range_z_size,
+                ) = range;
+                start_x < range_x_start + range_x_size
+                    && start_y < range_y_start + range_y_size
+                    && start_z < range_z_start + range_z_size
+            }) {
                 let start_block = blocks[start_x][start_y][start_z];
-                for x in (start_x + 1)..end_x {
-                    let curr_block = blocks[x][start_y][start_z];
-                    coord_set.remove(&(x, start_y, start_z));
-                    if start_block != curr_block {
-                        end_x = x;
-                        break;
-                    }
-                }
-                for x in start_x..end_x {
-                    for y in (start_y + 1)..end_y {
-                        let curr_block = blocks[x][y][start_z];
-                        coord_set.remove(&(x, y, start_z));
+                if start_block != Air {
+                    for x in (start_x + 1)..end_x {
+                        let curr_block = blocks[x][start_y][start_z];
                         if start_block != curr_block {
-                            end_y = y;
+                            end_x = x;
                             break;
                         }
                     }
-                }
-                for x in start_x..end_x {
-                    for y in start_y..end_y {
-                        for z in (start_z + 1)..end_z {
-                            let curr_block = blocks[x][y][z];
-                            coord_set.remove(&(x, y, z));
+                    for x in start_x..end_x {
+                        for y in (start_y + 1)..end_y {
+                            let curr_block = blocks[x][y][start_z];
                             if start_block != curr_block {
-                                end_z = z;
+                                end_y = y;
                                 break;
                             }
                         }
                     }
+                    for x in start_x..end_x {
+                        for y in start_y..end_y {
+                            for z in (start_z + 1)..end_z {
+                                let curr_block = blocks[x][y][z];
+                                if start_block != curr_block {
+                                    end_z = z;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
+
+                    // add largest mesh possible
+                    add_combined_mesh(start_block, coords, scale, &mut indices, &mut vertices);
+                    ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                 }
-
-                let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
-
-                // add largest mesh possible
-                add_combined_mesh(start_block, coords, scale, &mut indices, &mut vertices);
             }
         }
 
@@ -455,7 +489,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 5;
+        let render_distance = 20;
         let chunks = vec![];
         Self {
             chunks,
