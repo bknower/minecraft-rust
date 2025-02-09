@@ -10,6 +10,7 @@ anyhow = "1.0.81"
 bytemuck = { version = "1.14.3", features = ["derive"] }
 cfg-if = "1.0.0"
 cgmath = "0.18.0"
+derive_more = {"version" = "2.0.1", "features" = ["full"]}
 env_logger = "0.11.3"
 image = { version = "0.25.0", default-features = false, features = ["png", "jpeg"] }
 instant = "0.1.12"

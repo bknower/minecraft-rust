@@ -1,6 +1,7 @@
-use std::ops::Range;
-
 use crate::texture::Texture;
+use derive_more::{Add, Display, From, Into};
+use std::fmt::Display;
+use std::ops::Range;
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -30,10 +31,17 @@ pub struct Mesh {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable, Display)]
+#[display(
+    "ModelVertex - position: {:?}, tex_coords: {:?}, atlas_coords: {:?}",
+    position,
+    tex_coords,
+    atlas_coords
+)]
 pub struct ModelVertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
+    pub atlas_coords: [f32; 2],
 }
 
 impl Vertex for ModelVertex {
@@ -56,7 +64,7 @@ impl Vertex for ModelVertex {
                 wgpu::VertexAttribute {
                     offset: mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,
                     shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x3,
+                    format: wgpu::VertexFormat::Float32x2,
                 },
             ],
         }

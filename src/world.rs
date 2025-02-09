@@ -55,18 +55,22 @@ const LEFT_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
         position: V0,
         tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V2,
         tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V4,
         tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V6,
         tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
 ];
 
@@ -74,18 +78,22 @@ const RIGHT_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
         position: V1,
         tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
         tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V5,
         tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
         tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
 ];
 
@@ -93,18 +101,22 @@ const DOWN_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
         position: V0,
         tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V1,
         tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V4,
         tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V5,
         tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
 ];
 
@@ -112,18 +124,22 @@ const UP_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
         position: V2,
         tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
         tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V6,
         tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
         tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
 ];
 
@@ -131,18 +147,22 @@ const BACK_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
         position: V4,
         tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V5,
         tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V6,
         tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
         tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
 ];
 
@@ -150,18 +170,22 @@ const FRONT_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
         position: V0,
         tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V1,
         tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V2,
         tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
         tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
     },
 ];
 
@@ -221,7 +245,8 @@ impl Chunk {
             verts: [ModelVertex; 4],
             start_coords: [f32; 3],
             scale: [f32; 3],
-            atlas_coords: [f32; 2],
+            material_atlas_coords: [f32; 2],
+            face_index: usize,
         ) -> Vec<ModelVertex> {
             verts
                 .iter()
@@ -229,19 +254,55 @@ impl Chunk {
                     let ModelVertex {
                         position,
                         tex_coords,
-                        // normal,
+                        atlas_coords, // normal,
                     } = vertex;
-                    ModelVertex {
-                        position: [
-                            start_coords[0] + position[0] * scale[0],
-                            start_coords[1] + position[1] * scale[1],
-                            start_coords[2] + position[2] * scale[2],
+                    println!("Original Vertex: {}, {:?}", vertex, scale);
+
+                    let scaled_position = match face_index {
+                        0 | 1 => [
+                            // Left/Right faces - preserve X (normal to face)
+                            start_coords[0] + vertex.position[0], // Keep original X
+                            start_coords[1] + vertex.position[1] * scale[1], // Scale Y
+                            start_coords[2] + vertex.position[2] * scale[2], // Scale Z
                         ],
-                        tex_coords: [
-                            (atlas_coords[0] + tex_coords[0]) / ATLAS_SIZE as f32,
-                            (atlas_coords[1] + tex_coords[1]) / ATLAS_SIZE as f32,
+                        2 | 3 => [
+                            // Up/Down faces - preserve Y (normal to face)
+                            start_coords[0] + vertex.position[0] * scale[0], // Scale X
+                            start_coords[1] + vertex.position[1],            // Keep original Y
+                            start_coords[2] + vertex.position[2] * scale[2], // Scale Z
                         ],
-                    }
+                        4 | 5 => [
+                            // Front/Back faces - preserve Z (normal to face)
+                            start_coords[0] + vertex.position[0] * scale[0], // Scale X
+                            start_coords[1] + vertex.position[1] * scale[1], // Scale Y
+                            start_coords[2] + vertex.position[2],            // Keep original Z
+                        ],
+                        _ => unreachable!(),
+                    };
+                    // Handle texture coordinates scaling
+                    let new_tex_coords = match face_index {
+                        0 | 1 => [
+                            vertex.tex_coords[0] * scale[1], // Scale by Y
+                            vertex.tex_coords[1] * scale[2], // Scale by Z
+                        ],
+                        2 | 3 => [
+                            vertex.tex_coords[0] * scale[0], // Scale by X
+                            vertex.tex_coords[1] * scale[2], // Scale by Z
+                        ],
+                        4 | 5 => [
+                            vertex.tex_coords[0] * scale[0], // Scale by X
+                            vertex.tex_coords[1] * scale[1], // Scale by Y
+                        ],
+                        _ => unreachable!(),
+                    };
+
+                    let new_vertex = ModelVertex {
+                        position: scaled_position,
+                        tex_coords: new_tex_coords,
+                        atlas_coords: material_atlas_coords,
+                    };
+                    println!("{}, {:?},", new_vertex, scale);
+                    new_vertex
                 })
                 .collect()
         }
@@ -292,6 +353,19 @@ impl Chunk {
                     face_tuples.into_iter().enumerate()
                 {
                     let atlas_coords = atlas_coords.get(i).unwrap();
+                    // let new_scale = match i {
+                    //     0 | 1 => [scale_x as f32, scale_y as f32, 0.0],
+                    //     2 | 3 => [0.0, scale_y as f32, scale_z as f32],
+                    //     4 | 5 => [scale_x as f32, 0.0, scale_z as f32],
+                    //     _ => unreachable!(),
+                    // };
+                    // let index_of_0 = match i {
+                    //     0 | 1 => 2,
+                    //     2 | 3 => 0,
+                    //     4 | 5 => 1,
+                    //     _ => unreachable!(),
+                    // };
+                    println!("{}", i);
 
                     let starting_length = vertices.len();
                     vertices.append(&mut add_position_and_scale_to_vertices(
@@ -299,6 +373,7 @@ impl Chunk {
                         position,
                         [scale_x as f32, scale_y as f32, scale_z as f32],
                         *atlas_coords,
+                        i,
                     ));
                     add_indices(direction_indices, starting_length, indices);
                 }
@@ -315,15 +390,14 @@ impl Chunk {
                     let ModelVertex {
                         position,
                         tex_coords,
-                        // normal,
+                        atlas_coords, // normal,
                     } = vertex;
                     ModelVertex {
                         position: (p + Vector3::<f32>::from(*position)).into(),
-                        tex_coords: ((Vector2::<f32>::from(*tex_coords) + atlas_coords)
-                            / ATLAS_SIZE as f32)
-                            .into(),
+                        tex_coords: Vector2::<f32>::from(*tex_coords).into(),
                         // tex_coords: *tex_coords,
                         // normal: *normal,
+                        atlas_coords: Vector2::<f32>::from(*atlas_coords).into(),
                     }
                 })
                 .collect()
