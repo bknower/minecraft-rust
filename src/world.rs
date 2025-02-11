@@ -21,10 +21,22 @@ pub const CHUNK_SIZE_Z: usize = 64;
 
 pub const ATLAS_SIZE: usize = 32;
 
+pub fn index_to_xyz(index: usize) -> (usize, usize, usize) {
+    return (
+        index % CHUNK_SIZE_X,
+        (index / CHUNK_SIZE_Y) % CHUNK_SIZE_X,
+        ((index / CHUNK_SIZE_Z) / CHUNK_SIZE_Y) % CHUNK_SIZE_X,
+    );
+}
+
+pub fn xyz_to_index(x: usize, y: usize, z: usize) -> usize {
+    return x + z * CHUNK_SIZE_X + y * CHUNK_SIZE_X * CHUNK_SIZE_Z;
+}
+
 pub struct Chunk {
     pub chunk_x: i32,
     pub chunk_z: i32,
-    pub blocks: [[[Block; CHUNK_SIZE_Z]; CHUNK_SIZE_Y]; CHUNK_SIZE_X],
+    pub blocks: [Block; CHUNK_SIZE_Z * CHUNK_SIZE_Y * CHUNK_SIZE_Z],
     pub mesh: Option<Mesh>,
 }
 
@@ -197,33 +209,49 @@ const FRONT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
 const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
 
 impl Chunk {
-    fn new(chunk_x: i32, chunk_z: i32, perlin: Perlin) -> Self {
-        let mut blocks = [[[Block::Air; CHUNK_SIZE_Z]; CHUNK_SIZE_Y]; CHUNK_SIZE_X];
-        let sea_level = 40.0;
-        let height_variability = 20.0;
-        for x in 0usize..CHUNK_SIZE_X {
-            for z in 0usize..CHUNK_SIZE_Z {
-                let height_noise = perlin.get([
-                    (x as f64 + 0.5 + 16.0 * chunk_x as f64) / 64.0,
-                    (z as f64 + 0.5 + 16.0 * chunk_z as f64) / 64.0,
-                ]);
-                // println!("{}, {}, {}", height_noise, x, z);
-                let height = (sea_level + height_noise * height_variability) as usize;
-                for y in 0usize..CHUNK_SIZE_Y {
-                    if y < height {
-                        blocks[x][y][z] = Block::Stone;
-                    } else {
-                        blocks[x][y][z] = Block::Air;
-                    }
-                }
-            }
-        }
+    fn new(chunk_x: i32, chunk_z: i32) -> Self {
+        // let mut blocks = [[[Block::Air; CHUNK_SIZE_Z]; CHUNK_SIZE_Y];
+        // CHUNK_SIZE_X];
+        let mut blocks = [Block::Air; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
         Self {
             chunk_x,
             chunk_z,
             blocks,
             mesh: None,
         }
+    }
+
+    fn generate(&mut self, perlin: Perlin) {
+        let sea_level = 40.0;
+        let height_variability = 20.0;
+        for x in 0usize..CHUNK_SIZE_X {
+            for z in 0usize..CHUNK_SIZE_Z {
+                let height_noise = perlin.get([
+                    (x as f64 + 0.5 + 16.0 * self.chunk_x as f64) / 64.0,
+                    (z as f64 + 0.5 + 16.0 * self.chunk_z as f64) / 64.0,
+                ]);
+                // println!("{}, {}, {}", height_noise, x, z);
+                let height = (sea_level + height_noise * height_variability) as usize;
+                for y in 0usize..CHUNK_SIZE_Y {
+                    if y < height {
+                        self.set_block(x, y, z, Block::Stone);
+                        // blocks[x][y][z] = Block::Stone;
+                    } else {
+                        self.set_block(x, y, z, Block::Air);
+                        // blocks[x][y][z] = Block::Air;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_block(&self, x: usize, y: usize, z: usize) -> Block {
+        // not sure if this works when these sizes are different
+        self.blocks[xyz_to_index(x, y, z)]
+    }
+    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block: Block) {
+        // not sure if this works when these sizes are different
+        self.blocks[xyz_to_index(x, y, z)] = block
     }
 
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -492,10 +520,12 @@ impl Chunk {
                     && after_start_z
                     && start_z < range_z_end
             }) {
-                let start_block = blocks[start_x][start_y][start_z];
+                // let start_block = blocks[start_x][start_y][start_z];
+                let start_block = self.get_block(start_x, start_y, start_z);
                 if start_block != Air {
                     for x in (start_x + 1)..end_x {
-                        let curr_block = blocks[x][start_y][start_z];
+                        // let curr_block = blocks[x][start_y][start_z];
+                        let curr_block = self.get_block(x, start_y, start_z);
                         if start_block != curr_block {
                             end_x = x;
                             break;
@@ -504,7 +534,8 @@ impl Chunk {
 
                     'outer: for z in (start_z + 1)..end_z {
                         for x in start_x..end_x {
-                            let curr_block = blocks[x][start_y][z];
+                            // let curr_block = blocks[x][start_y][z];
+                            let curr_block = self.get_block(x, start_y, z);
                             if start_block != curr_block {
                                 end_z = z;
                                 break 'outer;
@@ -515,7 +546,8 @@ impl Chunk {
                     'outer: for y in (start_y + 1)..end_y {
                         for x in start_x..end_x {
                             for z in start_z..end_z {
-                                let curr_block = blocks[x][y][z];
+                                // let curr_block = blocks[x][y][z];
+                                let curr_block = self.get_block(x, y, z);
                                 if start_block != curr_block {
                                     end_y = y;
                                     break 'outer;
@@ -750,7 +782,8 @@ impl World {
             // println!("chunks to generate: {:?}", self.chunks_to_generate);
             let chunk_coord = self.chunks_to_generate.pop_front().unwrap();
             let chunk_start = now();
-            let mut new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
+            let mut new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y);
+            new_chunk.generate(self.perlin);
             let chunk_end = now();
 
             let mesh_start = now();
