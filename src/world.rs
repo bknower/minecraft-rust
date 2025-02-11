@@ -15,9 +15,9 @@ use crate::{
 };
 use wgpu::{naga::FastHashSet, util::DeviceExt, Device};
 
-pub const CHUNK_SIZE_X: usize = 16;
-pub const CHUNK_SIZE_Y: usize = 256;
-pub const CHUNK_SIZE_Z: usize = 16;
+pub const CHUNK_SIZE_X: usize = 64;
+pub const CHUNK_SIZE_Y: usize = 64;
+pub const CHUNK_SIZE_Z: usize = 64;
 
 pub const ATLAS_SIZE: usize = 32;
 
@@ -199,7 +199,7 @@ const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
 impl Chunk {
     fn new(chunk_x: i32, chunk_z: i32, perlin: Perlin) -> Self {
         let mut blocks = [[[Block::Air; CHUNK_SIZE_Z]; CHUNK_SIZE_Y]; CHUNK_SIZE_X];
-        let sea_level = 80.0;
+        let sea_level = 40.0;
         let height_variability = 20.0;
         for x in 0usize..CHUNK_SIZE_X {
             for z in 0usize..CHUNK_SIZE_Z {
@@ -256,7 +256,7 @@ impl Chunk {
                         tex_coords,
                         atlas_coords, // normal,
                     } = vertex;
-                    println!("Original Vertex: {}, {:?}", vertex, scale);
+                    // println!("Original Vertex: {}, {:?}", vertex, scale);
 
                     let scaled_position = match face_index {
                         0 | 1 => [
@@ -301,7 +301,7 @@ impl Chunk {
                         tex_coords: new_tex_coords,
                         atlas_coords: material_atlas_coords,
                     };
-                    println!("{}, {:?},", new_vertex, scale);
+                    // println!("{}, {:?},", new_vertex, scale);
                     new_vertex
                 })
                 .collect()
@@ -365,7 +365,7 @@ impl Chunk {
                     //     4 | 5 => 1,
                     //     _ => unreachable!(),
                     // };
-                    println!("{}", i);
+                    // println!("{}", i);
 
                     let starting_length = vertices.len();
                     vertices.append(&mut add_position_and_scale_to_vertices(
@@ -390,14 +390,14 @@ impl Chunk {
                     let ModelVertex {
                         position,
                         tex_coords,
-                        atlas_coords, // normal,
+                        ..
                     } = vertex;
                     ModelVertex {
                         position: (p + Vector3::<f32>::from(*position)).into(),
                         tex_coords: Vector2::<f32>::from(*tex_coords).into(),
                         // tex_coords: *tex_coords,
                         // normal: *normal,
-                        atlas_coords: Vector2::<f32>::from(*atlas_coords).into(),
+                        atlas_coords: atlas_coords.into(),
                     }
                 })
                 .collect()
@@ -424,6 +424,36 @@ impl Chunk {
             use Block::*;
             let (start_x, start_y, start_z) = coords;
             let (mut end_x, mut end_y, mut end_z) = (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
+
+            let mut block_in_range = |x: usize, y: usize, z: usize| {
+                ranges.iter().any(|range| {
+                    let &(
+                        range_x_start,
+                        range_y_start,
+                        range_z_start,
+                        range_x_size,
+                        range_y_size,
+                        range_z_size,
+                    ) = range;
+
+                    let (range_x_end, range_y_end, range_z_end) = (
+                        range_x_start + range_x_size,
+                        range_y_start + range_y_size,
+                        range_z_start + range_z_size,
+                    );
+                    let (after_start_x, after_start_y, after_start_z) = (
+                        start_x >= range_x_start,
+                        start_y >= range_y_start,
+                        start_z >= range_z_start,
+                    );
+                    after_start_x
+                        && start_x < range_x_end
+                        && after_start_y
+                        && start_y < range_y_end
+                        && after_start_z
+                        && start_z < range_z_end
+                })
+            };
 
             // if this block is not in any of the existing ranges
             if !ranges.iter().any(|range| {
@@ -536,11 +566,13 @@ impl Chunk {
         //                 {
         //                     // let face_tuple = face_tuples.get(i).unwrap();
         //                     // let (direction, direction_vertices, direction_indices) = face_tuple;
-        //                     let atlas_coords = if texture_length == 1 {
-        //                         atlas_coords.first().unwrap()
-        //                     } else {
-        //                         atlas_coords.get(i).unwrap()
-        //                     };
+        //                     // let atlas_coords = if texture_length == 1 {
+        //                     //     atlas_coords.first().unwrap()
+        //                     // } else {
+        //                     //     atlas_coords.get(i).unwrap()
+        //                     // };
+        //                     let atlas_coords = atlas_coords.get(i).unwrap();
+        //                     // println!("{:?}", atlas_coords);
         //                     if direction {
         //                         let starting_length = vertices.len();
         //                         vertices.append(&mut add_position_to_vertices(
@@ -608,7 +640,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 10;
+        let render_distance = 5;
         let chunks = vec![];
         Self {
             chunks,
