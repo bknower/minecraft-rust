@@ -1,3 +1,4 @@
+use paste::paste;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
@@ -676,7 +677,79 @@ pub struct World {
     pub perlin: Perlin,
     pub position: Point3<f32>,
     pub chunks_to_generate: VecDeque<Point2<i32>>,
+    pub world_stats: WorldStats,
 }
+
+// macro written by chatgpt to auto implement adding new times and getting
+// averages from times
+macro_rules! impl_stat_methods {
+    ($($field:ident => $short_name:ident),*) => {
+        impl WorldStats {
+            $(
+                // Function to add a time entry
+                paste! {
+                    pub fn [<add_ $short_name _time>](&mut self, time: f64) {
+                        if self.$field.len() < self.rolling_average_length {
+                            self.$field.push(time);
+                        } else {
+                            self.$field.remove(0);
+                            self.$field.push(time);
+                        }
+                    }
+                }
+
+                // Function to get the average
+                paste! {
+                    pub fn [<get_ $short_name _avg>](&self) -> f64 {
+                        if self.$field.is_empty() {
+                            0.0
+                        } else {
+                            self.$field.iter().sum::<f64>() / self.$field.len() as f64
+                        }
+                    }
+                }
+            )*
+        }
+    };
+}
+
+pub struct WorldStats {
+    pub rolling_average_length: usize,
+    pub chunk_gen_times: Vec<f64>,
+    pub mesh_gen_times: Vec<f64>,
+    pub vertices: u64,
+}
+
+impl Default for WorldStats {
+    fn default() -> WorldStats {
+        WorldStats {
+            rolling_average_length: 20,
+            chunk_gen_times: vec![],
+            mesh_gen_times: vec![],
+            vertices: 0,
+        }
+    }
+}
+
+impl_stat_methods!(
+    chunk_gen_times => chunk_gen,
+    mesh_gen_times => mesh_gen
+);
+
+// impl WorldStats {
+//     fn new_time(&mut self, time: f64, vec: &mut Vec<f64>) {
+//         if vec.len() < self.rolling_average_length {
+//             vec.push(time);
+//         } else {
+//             vec.remove(0);
+//             vec.push(time)
+//         }
+//     }
+
+//     fn get_average(vec: &Vec<f64>) -> f64 {
+//         vec.iter().sum::<f64>() / vec.len() as f64
+//     }
+// }
 
 fn position_to_chunk_position(p: Point3<f32>) -> Point2<i32> {
     [
@@ -690,7 +763,7 @@ impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
         // let val = perlin.get([42.4, 37.7, 2.8]);
-        let render_distance = 5;
+        let render_distance = 20;
         let chunks = vec![];
         Self {
             chunks,
@@ -698,6 +771,7 @@ impl World {
             perlin,
             position: (0.0, 0.0, 0.0).into(),
             chunks_to_generate: VecDeque::new(),
+            world_stats: WorldStats::default(),
         }
     }
 
@@ -808,7 +882,10 @@ impl World {
             new_chunk.update(device, queue);
             let mesh_end = now();
             self.chunks.push(new_chunk);
+            self.world_stats.add_chunk_gen_time(chunk_end - chunk_start);
+            self.world_stats.add_mesh_gen_time(mesh_end - mesh_start);
             println!("new_chunk: {:?}", chunk_coord);
+
             println!(
                 "chunk time: {:?}ms, mesh time: {:?}ms",
                 chunk_end - chunk_start,

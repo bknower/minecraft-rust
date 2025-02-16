@@ -18,6 +18,8 @@ imgui-winit-support = "0.13.0"
 instant = "0.1.12"
 log = "0.4.21"
 noise = { version = "0.8.2", features = ["images"] }
+num-format = "0.4.4"
+paste = "1.0.15"
 pollster = "0.3.0"
 rayon = "1.10.0"
 smallvec = "1.14.0"

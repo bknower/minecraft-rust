@@ -5,22 +5,28 @@ mod imgui_renderer;
 mod model;
 mod resources;
 mod texture;
-mod world;
 mod utils;
+mod world;
 use camera::{Camera, CameraController, Projection};
 use cgmath::{num_traits::float, prelude::*};
+use imgui::internal::DataTypeKind;
 use imgui::sys::ImGuiKey_J;
-use imgui::{Context, DrawData, FontSource, MouseCursor};
+use imgui::{Context, DrawData, FontSource, MouseCursor, StyleVar, Ui};
 use imgui_renderer::{Renderer, RendererConfig};
 // use imgui_wgpu::{Renderer, RendererConfig};
 use imgui::Condition;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use model::{DrawModel, Mesh, Model, Vertex};
+use num_format::{Locale, ToFormattedString};
 use std::env;
+use std::fmt::Display;
+use std::iter::Map;
 use std::sync::Arc;
 use std::time::Instant;
 use texture::Texture;
+use utils::*;
 use wgpu::util::DeviceExt;
+use wgpu::PresentMode;
 use winit::dpi::PhysicalPosition;
 use winit::window::{self, WindowId};
 use winit::{
@@ -243,9 +249,10 @@ impl State {
         //     .filter(|f| f.is_srgb())
         //     .next()
         //     .unwrap_or(surface_caps.formats[0]);
-        let config = surface
+        let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();
+        config.present_mode = PresentMode::Immediate;
         surface.configure(&device, &config);
         let diffuse_bytes = include_bytes!("happy-tree.png");
         let diffuse_texture =
@@ -546,8 +553,10 @@ impl State {
         // if updated {
         let mut chunk_instances = vec![];
 
+        let mut vertices = 0;
         for chunk in self.world.chunks.as_slice() {
             if let Some(mesh) = &chunk.mesh {
+                vertices += mesh.vertex_buffer.size();
                 let position = cgmath::Vector3 {
                     x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32),
                     y: 0.0,
@@ -560,6 +569,7 @@ impl State {
                 chunk_instances.push(Instance { position, rotation });
             }
         }
+        self.world.world_stats.vertices = vertices;
         // let position = cgmath::Vector3 {
         // 	x: 0.0,
         // 	y: 0.0,
@@ -684,33 +694,70 @@ impl State {
 
                 let ui = imgui_context.new_frame();
 
+                fn render_slider<T>(ui: &Ui, label: &str, value: &mut T, min: T, max: T, width: f32)
+                where
+                    T: DataTypeKind, // `imgui-rs` requires Numeric trait (i32, f32, etc.)
                 {
-                    let window = ui.window("Hello World");
+                    ui.text(format!("{}: ", label));
+                    ui.same_line();
+                    // ui.push_item_width(width);
+
+                    let window_width = ui.window_size()[0];
+                    let cursor_y = ui.cursor_pos()[1];
+
+                    let right_align_x = window_width - width - 10.0; // Adjust with padding
+                    ui.set_cursor_pos([right_align_x, cursor_y]);
+
+                    ui.set_next_item_width(width);
+
+                    ui.slider("##slider", min, max, value);
+
+                    // ui.pop_item_width(); // Restore width to default
+                }
+
+                {
+                    let window = ui.window("Debug");
                     window
                         .size([300.0, 100.0], imgui::Condition::FirstUseEver)
                         .build(|| {
-                            ui.text("Hello world!");
-                            ui.text("This...is...imgui-rs on WGPU!");
-                            ui.separator();
-                            let mouse_pos = 
-                            // self.imgui.as_ref().unwrap().context.io().mouse_pos;
-                            ui.io().mouse_pos;
-                            // println!("{:?}", mouse_pos);
-                            ui.text(format!(
-                                "Mouse Position: ({:.1},{:.1})",
-                                mouse_pos[0], mouse_pos[1]
-                            ));
+
+                            // additional print ideas
+                            // - interactable meshing algorithm selector
+                            let prints = stats! {
+                                "FPS" => ui.io().framerate,
+                                "Chunks loaded" => self.world.chunks.len(),
+                                "Last mesh time" => self.world.world_stats.mesh_gen_times.last().unwrap_or(&0.0),
+                                "Average mesh time (last 20)" => self.world.world_stats.get_mesh_gen_avg(),                                
+                                "Last chunk time" => self.world.world_stats.chunk_gen_times.last().unwrap_or(&0.0),
+                                "Average chunk time (last 20)" => self.world.world_stats.get_chunk_gen_avg(),
+                                "Triangles" => (self.world.world_stats.vertices / 3).to_formatted_string(&Locale::en).to_string()
+                            };
+                            printy!((self.world.world_stats.vertices / 3).to_formatted_string(&Locale::en));
+
+                            for (name, value) in &prints {
+                                let left_text = format!("{:}:", name);
+                                let right_text = format!("{:.2}", value());
+                                let window_width = ui.window_size()[0];
+                                let cursor_y: f32 = ui.cursor_pos()[1];
+
+                                ui.text(left_text);
+                                ui.same_line();
+                                // Calculate right-aligned position
+                                let text_width = ui.calc_text_size(&right_text)[0]; // Get the width of the right text
+                                let right_align_x = window_width - text_width - 10.0; // Adjust with padding
+
+                                // Set cursor for right-aligned text
+                                ui.set_cursor_pos([right_align_x, cursor_y]);
+                                ui.text(right_text);
+
+                            }
+
+                            render_slider(ui, "Render Distance", &mut self.world.render_distance, 0, 100, 150.0)
+
+
                         });
 
-                    let window = ui.window("Hello too");
-                    window
-                        .size([400.0, 200.0], Condition::FirstUseEver)
-                        .position([400.0, 200.0], Condition::FirstUseEver)
-                        .build(|| {
-                            ui.text(format!("Frametime: {delta_s:?}"));
-                        });
-
-                    ui.show_demo_window(&mut imgui.demo_open);
+                    // ui.show_demo_window(&mut imgui.demo_open);
                 }
 
                 if imgui.last_cursor != ui.mouse_cursor() {
@@ -730,7 +777,7 @@ impl State {
 
                 // render_pass.
             }
-    }
+        }
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -848,12 +895,10 @@ impl ApplicationHandler for App {
         match event {
             DeviceEvent::MouseMotion { delta } => {
                 if state.mouse_pressed {
-
-                    state.camera_controller
-                        .process_mouse(delta.0, delta.1)
+                    state.camera_controller.process_mouse(delta.0, delta.1)
                 }
             }
-            DeviceEvent::Removed => {},
+            DeviceEvent::Removed => {}
             _ => {}
         }
         imgui.platform.handle_event::<()>(
@@ -886,8 +931,6 @@ impl ApplicationHandler for App {
         // }
         // return;
 
-
-
         let imgui = state.imgui.as_mut().unwrap();
         let mut imgui_context = &mut imgui.context;
         imgui.platform.handle_event(
@@ -896,16 +939,14 @@ impl ApplicationHandler for App {
             &Event::<WindowEvent>::WindowEvent {
                 window_id,
                 event: event.clone(),
-            }
+            },
         );
-
-
 
         if window_id == window.id() {
             if !imgui_context.io().want_capture_mouse {
                 state.input(&event);
             }
-            
+
             match &event {
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::CloseRequested
@@ -934,7 +975,6 @@ impl ApplicationHandler for App {
                     state.last_render_time = now;
                     imgui_context.io_mut().update_delta_time(dt);
                     // println!("{:?}", imgui_context.io_mut().framerate);
-
 
                     state.update(dt);
                     match state.render() {
