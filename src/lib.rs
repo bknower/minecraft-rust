@@ -1,22 +1,35 @@
+#![allow(unused_imports, unused)]
+mod block;
 mod camera;
+mod imgui_renderer;
 mod model;
 mod resources;
 mod texture;
 mod world;
-mod block;
 use camera::{Camera, CameraController, Projection};
 use cgmath::{num_traits::float, prelude::*};
+use imgui::sys::ImGuiKey_J;
+use imgui::{Context, DrawData, FontSource, MouseCursor};
+use imgui_renderer::{Renderer, RendererConfig};
+// use imgui_wgpu::{Renderer, RendererConfig};
+use imgui::Condition;
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use model::{DrawModel, Mesh, Model, Vertex};
 use std::env;
+use std::sync::Arc;
+use std::time::Instant;
 use texture::Texture;
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalPosition;
+use winit::window::{self, WindowId};
 use winit::{
+    application::ApplicationHandler,
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::*,
     window::Window,
-    window::WindowBuilder,
+    // window::WindowBuilder,
+    window::WindowAttributes,
 };
 
 use crate::model::Material;
@@ -32,8 +45,8 @@ impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation) )
-                // * cgmath::Matrix4::from_scale(0.5))// note: this was just for scaling the cube
+                * cgmath::Matrix4::from(self.rotation))
+            // * cgmath::Matrix4::from_scale(0.5))// note: this was just for scaling the cube
             .into(),
         }
     }
@@ -137,8 +150,18 @@ impl CameraUniform {
     }
 }
 
-struct State<'w> {
-    surface: wgpu::Surface<'w>,
+struct ImguiState {
+    context: imgui::Context,
+    platform: WinitPlatform,
+    renderer: Renderer,
+    clear_color: wgpu::Color,
+    last_render_time: Instant,
+    last_cursor: Option<MouseCursor>,
+    demo_open: bool,
+}
+
+struct State {
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -159,19 +182,29 @@ struct State<'w> {
     depth_texture: Texture,
     atlas: Material,
     mouse_pressed: bool,
-    world: World
+    world: World,
+    imgui: Option<ImguiState>,
+    window: Arc<Window>,
+    hidpi_factor: f64,
 }
-impl<'w> State<'w> {
+impl State {
     // Creating some of the wgpu types requires async code
-    async fn new(window: &'w Window) -> Self {
+    async fn new(event_loop: &ActiveEventLoop) -> Self {
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes())
+                .unwrap(),
+        );
+
         let size = window.inner_size();
+        let hidpi_factor = window.scale_factor();
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::default();
 
         let surface = instance
-            .create_surface(window)
+            .create_surface(window.clone())
             .expect("Failed to create surface");
 
         let adapter = instance
@@ -324,7 +357,7 @@ impl<'w> State<'w> {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, 
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -336,14 +369,14 @@ impl<'w> State<'w> {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: texture::Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less, 
-                stencil: wgpu::StencilState::default(),     
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState {
-                count: 1,                         
-                mask: !0,                         
-                alpha_to_coverage_enabled: false, 
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
             },
             multiview: None, // 5.
         });
@@ -357,7 +390,6 @@ impl<'w> State<'w> {
         //     chunk.blocks.map()
         // });
         let mut block_instances: Vec<Instance> = Vec::new();
-
 
         let instances = block_instances;
         // let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -396,13 +428,13 @@ impl<'w> State<'w> {
         //     resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
         //         .await
         //         .unwrap();
-		// let obj_model =
-		// resources::load_block("stone", 
-		// vec!["atlas.png"], &device, &queue, &texture_bind_group_layout)
-		// 	.await;
+        // let obj_model =
+        // resources::load_block("stone",
+        // vec!["atlas.png"], &device, &queue, &texture_bind_group_layout)
+        // 	.await;
 
-		let atlas_texture = load_texture("atlas.png", &device, &queue).await.unwrap();
-		let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let atlas_texture = load_texture("atlas.png", &device, &queue).await.unwrap();
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -416,11 +448,11 @@ impl<'w> State<'w> {
             ],
             label: None,
         });
-		let atlas = Material {
-			name: "atlas".to_string(),
-			diffuse_texture: atlas_texture,
-			bind_group
-		};
+        let atlas = Material {
+            name: "atlas".to_string(),
+            diffuse_texture: atlas_texture,
+            bind_group,
+        };
 
         Self {
             surface,
@@ -444,7 +476,10 @@ impl<'w> State<'w> {
             depth_texture,
             atlas,
             mouse_pressed: false,
-            world
+            world,
+            imgui: None,
+            window,
+            hidpi_factor,
         }
     }
 
@@ -461,17 +496,20 @@ impl<'w> State<'w> {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture =
                 texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
-
         }
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::KeyboardInput { event: KeyEvent {
-                physical_key: winit::keyboard::PhysicalKey::Code(keycode),
-                state,
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: winit::keyboard::PhysicalKey::Code(keycode),
+                        state,
+                        ..
+                    },
                 ..
-            }, ..} => self.camera_controller.process_keyboard(*keycode, *state),
+            } => self.camera_controller.process_keyboard(*keycode, *state),
             WindowEvent::MouseWheel { delta, .. } => {
                 self.camera_controller.process_scroll(delta);
                 true
@@ -492,53 +530,57 @@ impl<'w> State<'w> {
         #[allow(unused)]
         let frame = self.frame;
         self.camera_controller.update_camera(&mut self.camera, dt);
-        self.camera_uniform.update_view_proj(&self.camera, &self.projection);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
-        let updated = self.world.update(self.camera.position, &self.device, &self.queue);
+        let updated = self
+            .world
+            .update(self.camera.position, &self.device, &self.queue);
 
         // if updated {
-            let mut chunk_instances = vec![];
+        let mut chunk_instances = vec![];
 
-            for chunk in self.world.chunks.as_slice() {
-				if let Some(mesh) = &chunk.mesh {
-					let position = cgmath::Vector3 {
-						x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32), 
-						y: 0.0, 
-						z: ((chunk.chunk_z as f32 - 0.5) * world::CHUNK_SIZE_Z as f32)};
-					let rotation =                         cgmath::Quaternion::from_axis_angle(
-						cgmath::Vector3::unit_z(),
-						cgmath::Deg(0.0),
-					);
-					chunk_instances.push(Instance {position, rotation});
-				}
+        for chunk in self.world.chunks.as_slice() {
+            if let Some(mesh) = &chunk.mesh {
+                let position = cgmath::Vector3 {
+                    x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32),
+                    y: 0.0,
+                    z: ((chunk.chunk_z as f32 - 0.5) * world::CHUNK_SIZE_Z as f32),
+                };
+                let rotation = cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_z(),
+                    cgmath::Deg(0.0),
+                );
+                chunk_instances.push(Instance { position, rotation });
             }
-				// let position = cgmath::Vector3 {
-				// 	x: 0.0, 
-				// 	y: 0.0, 
-				// 	z: 0.0};
-				// let rotation =                         cgmath::Quaternion::from_axis_angle(
-				// 	cgmath::Vector3::unit_z(),
-				// 	cgmath::Deg(0.0),
-				// );
-				// chunk_instances.push(Instance {position, rotation});
-            self.instances = chunk_instances;
+        }
+        // let position = cgmath::Vector3 {
+        // 	x: 0.0,
+        // 	y: 0.0,
+        // 	z: 0.0};
+        // let rotation =                         cgmath::Quaternion::from_axis_angle(
+        // 	cgmath::Vector3::unit_z(),
+        // 	cgmath::Deg(0.0),
+        // );
+        // chunk_instances.push(Instance {position, rotation});
+        self.instances = chunk_instances;
 
-            let instance_data = self
-                .instances
-                .iter()
-                .map(Instance::to_raw)
-                .collect::<Vec<_>>();
-            self.instance_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Instance Buffer"),
-                    contents: bytemuck::cast_slice(&instance_data),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+        self.instance_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
         // }
         self.frame += 1;
     }
@@ -554,15 +596,15 @@ impl<'w> State<'w> {
                 label: Some("Render Encoder"),
             });
         {
-			let mut meshes: Vec<&Mesh> = vec![];
-			for chunk in &self.world.chunks {
-				let mesh = &chunk.mesh;
-				if let Some(mesh) = mesh {
-					meshes.push(mesh);
-				}
-			}
-			// let meshes: Vec<Mesh> = self.world.chunks.iter().map(|chunk| chunk.to_mesh(&self.device, &self.queue)).collect();
-			// let mesh_refs: Vec<&Mesh> = meshes.iter().map(|mesh| mesh).collect();
+            let mut meshes: Vec<&Mesh> = vec![];
+            for chunk in &self.world.chunks {
+                let mesh = &chunk.mesh;
+                if let Some(mesh) = mesh {
+                    meshes.push(mesh);
+                }
+            }
+            // let meshes: Vec<Mesh> = self.world.chunks.iter().map(|chunk| chunk.to_mesh(&self.device, &self.queue)).collect();
+            // let mesh_refs: Vec<&Mesh> = meshes.iter().map(|mesh| mesh).collect();
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -600,23 +642,28 @@ impl<'w> State<'w> {
             //     0..self.instances.len() as u32,
             //     &self.camera_bind_group,
             // );
-			// let meshes: Vec<Option<Mesh>> = self.world.chunks.iter().map(|chunk|  chunk.mesh).collect();
-			// self.world.chunks.iter().for_each(|chunk| {
-			// 	let mesh = chunk.mesh.unwrap();
+            // let meshes: Vec<Option<Mesh>> = self.world.chunks.iter().map(|chunk|  chunk.mesh).collect();
+            // self.world.chunks.iter().for_each(|chunk| {
+            // 	let mesh = chunk.mesh.unwrap();
 
-			// 	// if let Some(mesh) = chunk.mesh {
-			// 		render_pass.draw_mesh(&mesh, &self.atlas, &self.camera_bind_group);
-			// 	// }
-			// });
-			// for mesh in meshes {
-			// 	render_pass.draw_mesh(mesh, &self.atlas, &self.camera_bind_group);
-			// }
-			for i in 0..meshes.len() {
-				let mesh = meshes.get(i).unwrap();
-				render_pass.draw_mesh_instanced(mesh, &self.atlas, (i as u32)..(i as u32+1), &self.camera_bind_group);
-			}
+            // 	// if let Some(mesh) = chunk.mesh {
+            // 		render_pass.draw_mesh(&mesh, &self.atlas, &self.camera_bind_group);
+            // 	// }
+            // });
+            // for mesh in meshes {
+            // 	render_pass.draw_mesh(mesh, &self.atlas, &self.camera_bind_group);
+            // }
+            for i in 0..meshes.len() {
+                let mesh = meshes.get(i).unwrap();
+                render_pass.draw_mesh_instanced(
+                    mesh,
+                    &self.atlas,
+                    (i as u32)..(i as u32 + 1),
+                    &self.camera_bind_group,
+                );
+            }
 
-			// render_pass.
+            // render_pass.
         }
 
         // submit will accept anything that implements IntoIter
@@ -625,64 +672,274 @@ impl<'w> State<'w> {
 
         Ok(())
     }
+
+    fn setup_imgui(&mut self) {
+        let mut context = Context::create();
+        let mut platform = imgui_winit_support::WinitPlatform::new(&mut context);
+        platform.attach_window(
+            context.io_mut(),
+            &self.window,
+            imgui_winit_support::HiDpiMode::Default,
+        );
+
+        let font_size = (13.0 * self.hidpi_factor) as f32;
+        context.io_mut().font_global_scale = (1.0 / self.hidpi_factor) as f32;
+
+        context.fonts().add_font(&[FontSource::DefaultFontData {
+            config: Some(imgui::FontConfig {
+                oversample_h: 1,
+                pixel_snap_h: true,
+                size_pixels: font_size,
+                ..Default::default()
+            }),
+        }]);
+
+        let clear_color = wgpu::Color {
+            r: 0.1,
+            g: 0.2,
+            b: 0.3,
+            a: 1.0,
+        };
+
+        // let font_atlas = imgui.fonts();
+        // font_atlas.add_font(&[imgui::FontSource::DefaultFontData {
+        //     config: Some(imgui::FontConfig::default()),
+        // }]);
+        // let _ = font_atlas.build_rgba32_texture();
+        let renderer_config = RendererConfig {
+            texture_format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            ..Default::default()
+        };
+
+        let mut renderer = Renderer::new(&mut context, &self.device, &self.queue, renderer_config);
+
+        self.imgui = Some(ImguiState {
+            context,
+            platform,
+            renderer,
+            clear_color,
+            last_render_time: Instant::now(),
+            last_cursor: None,
+            demo_open: true,
+        });
+    }
+}
+
+#[derive(Default)]
+struct App {
+    state: Option<State>,
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // letwindow = Some(State::new(event_loop));
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // self.state = Some(rt.block_on(State::new(self.window.as_ref().unwrap().clone())));
+        self.state = Some(rt.block_on(State::new(event_loop)));
+        self.state.as_mut().unwrap().setup_imgui();
+    }
+
+    // fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+    //     let state = self.state.as_mut().unwrap();
+    //     let window = &state.window;
+    //     let imgui = state.imgui.as_mut().unwrap();
+    //     let mut imgui_context = &mut imgui.context;
+    //     let now = Instant::now();
+    //     imgui_context
+    //         .io_mut()
+    //         .update_delta_time(now - imgui.last_render_time);
+    //     imgui.last_render_time = now;
+    // }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let state = self.state.as_mut().unwrap();
+        let window = &state.window;
+        let imgui = state.imgui.as_mut().unwrap();
+        let mut imgui_context = &mut imgui.context;
+        imgui
+            .platform
+            .prepare_frame(imgui_context.io_mut(), &window)
+            .expect("Failed to prepare frame");
+        window.request_redraw();
+        imgui.platform.handle_event(
+            imgui_context.io_mut(),
+            &window,
+            &Event::<WindowEvent>::AboutToWait,
+        );
+    }
+
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                if self.state.as_ref().unwrap().mouse_pressed {
+                    self.state
+                        .as_mut()
+                        .unwrap()
+                        .camera_controller
+                        .process_mouse(delta.0, delta.1)
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        let state = self.state.as_mut().unwrap();
+        let window = state.window.clone();
+        if window_id == window.id() {
+            state.input(&event);
+            let imgui = state.imgui.as_mut().unwrap();
+            let mut imgui_context = &mut imgui.context;
+            match &event {
+                #[cfg(not(target_arch = "wasm32"))]
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            physical_key: winit::keyboard::PhysicalKey::Code(KeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => {
+                    event_loop.exit();
+                }
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(*physical_size);
+                }
+                WindowEvent::ScaleFactorChanged { .. } => state.resize(window.inner_size()),
+
+                WindowEvent::RedrawRequested => {
+                    let delta_s = imgui.last_render_time.elapsed();
+                    let now = instant::Instant::now();
+                    let dt = now - imgui.last_render_time;
+
+                    imgui_context.io_mut().update_delta_time(dt);
+                    imgui.last_render_time = now;
+
+                    let frame = match state.surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(e) => {
+                            eprintln!("dropped frame: {e:?}");
+                            return;
+                        }
+                    };
+
+                    imgui
+                        .platform
+                        .prepare_frame(imgui_context.io_mut(), &window)
+                        .expect("Failed to prepare frame");
+
+                    // imgui.platform.prepare_render(ui, &window);
+                    // let draw_data = imgui_context.render();
+
+                    let ui = imgui_context.new_frame();
+
+                    {
+                        let window = ui.window("Hello World");
+                        window
+                            .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                            .build(|| {
+                                ui.text("Hello world!");
+                                ui.text("This...is...imgui-rs on WGPU!");
+                                ui.separator();
+                                let mouse_pos = ui.io().mouse_pos;
+                                ui.text(format!(
+                                    "Mouse Position: ({:.1},{:.1})",
+                                    mouse_pos[0], mouse_pos[1]
+                                ));
+                            });
+
+                        let window = ui.window("Hello too");
+                        window
+                            .size([400.0, 200.0], Condition::FirstUseEver)
+                            .position([400.0, 200.0], Condition::FirstUseEver)
+                            .build(|| {
+                                ui.text(format!("Frametime: {delta_s:?}"));
+                            });
+
+                        ui.show_demo_window(&mut imgui.demo_open);
+                    }
+
+                    let mut encoder: wgpu::CommandEncoder = state
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                    if imgui.last_cursor != ui.mouse_cursor() {
+                        imgui.last_cursor = ui.mouse_cursor();
+                        imgui.platform.prepare_render(ui, &state.window);
+                    }
+
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+
+                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: None,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(imgui.clear_color),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    });
+
+                    imgui
+                        .renderer
+                        .render(
+                            imgui.context.render(),
+                            &state.queue,
+                            &state.device,
+                            &mut rpass,
+                        )
+                        .expect("Rendering failed");
+                    drop(rpass);
+                    state.queue.submit(Some(encoder.finish()));
+                    frame.present();
+
+                    state.update(dt);
+                    match state.render() {
+                        Ok(_) => {}
+                        // Reconfigure the surface if lost
+                        Err(wgpu::SurfaceError::Lost) => {
+                            state.resize(state.size);
+                        }
+                        // The system is out of memory, we should probably quit
+                        Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                        // All other errors (Outdated, Timeout) should be resolved by the next frame
+                        Err(e) => eprintln!("{:?}", e),
+                    }
+                }
+                _ => {}
+            }
+        }
+        // event => {
+        //     platform.handle_event(imgui.io_mut(), &window, &event);
+        // }
+        // _ => {}
+    }
 }
 
 pub async fn run() {
     // env::set_var("RUST_BACKTRACE", "1");
     env_logger::init(); // Necessary for logging within WGPU
     let event_loop = EventLoop::new().expect("Event loop exists"); // Loop provided by winit for handling window events
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+                                                                   // let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let mut state = State::new(&window).await;
-    let mut last_render_time = instant::Instant::now();
-
-    event_loop
-        .run(|event, target| match event {
-            Event::DeviceEvent {
-                event: DeviceEvent::MouseMotion{ delta, },
-                .. // We're not using device_id currently
-            } => if state.mouse_pressed {
-                state.camera_controller.process_mouse(delta.0, delta.1)
-            },
-            Event::WindowEvent {
-                window_id,
-                ref event,
-            } if window_id == window.id() => {
-                state.input(event);
-                match &event {
-                    #[cfg(not(target_arch="wasm32"))]
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        event: KeyEvent {physical_key: winit::keyboard::PhysicalKey::Code(KeyCode::Escape), ..},
-                        ..
-                    } => {
-                        target.exit();
-                    } 
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { .. } => state.resize(window.inner_size()),
-
-                    WindowEvent::RedrawRequested => {
-                        let now = instant::Instant::now();
-                        let dt = now - last_render_time;
-                        last_render_time = now;
-                        state.update(dt);
-                        match state.render() {
-                            Ok(_) => {}
-                            // Reconfigure the surface if lost
-                            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                            // The system is out of memory, we should probably quit
-                            Err(wgpu::SurfaceError::OutOfMemory) => target.exit(),
-                            // All other errors (Outdated, Timeout) should be resolved by the next frame
-                            Err(e) => eprintln!("{:?}", e),
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Event::AboutToWait => window.request_redraw(),
-            _ => {}
-        })
-        .unwrap();
+    // let mut app = App::new(platform, imgui);
+    event_loop.run_app(&mut App::default()).unwrap();
 }
