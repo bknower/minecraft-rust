@@ -9,6 +9,8 @@ use std::sync::Arc;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 
+use crate::texture;
+
 static VS_ENTRY_POINT: &str = "vs_main";
 static FS_ENTRY_POINT_LINEAR: &str = "fs_main_linear";
 static FS_ENTRY_POINT_SRGB: &str = "fs_main_srgb";
@@ -288,7 +290,7 @@ impl<'s> RendererConfig<'s> {
     pub fn with_shaders(shader: ShaderModuleDescriptor<'s>) -> Self {
         RendererConfig {
             texture_format: TextureFormat::Rgba8Unorm,
-            depth_format: None,
+            depth_format: Some(texture::Texture::DEPTH_FORMAT),
             sample_count: 1,
             shader: Some(shader),
             vertex_shader_entry_point: Some(VS_ENTRY_POINT),

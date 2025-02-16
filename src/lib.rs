@@ -155,7 +155,6 @@ struct ImguiState {
     platform: WinitPlatform,
     renderer: Renderer,
     clear_color: wgpu::Color,
-    last_render_time: Instant,
     last_cursor: Option<MouseCursor>,
     demo_open: bool,
 }
@@ -186,6 +185,7 @@ struct State {
     imgui: Option<ImguiState>,
     window: Arc<Window>,
     hidpi_factor: f64,
+    last_render_time: Instant,
 }
 impl State {
     // Creating some of the wgpu types requires async code
@@ -480,6 +480,7 @@ impl State {
             imgui: None,
             window,
             hidpi_factor,
+            last_render_time: Instant::now(),
         }
     }
 
@@ -663,11 +664,70 @@ impl State {
                 );
             }
 
+            // render imgui
+            let imgui = self.imgui.as_mut().unwrap();
+            let mut imgui_context = &mut imgui.context;
+            let delta_s = self.last_render_time.elapsed();
+
+            // let frame = self.surface.get_current_texture().unwrap();
+
+            imgui
+                .platform
+                .prepare_frame(imgui_context.io_mut(), &self.window)
+                .expect("Failed to prepare frame");
+
+            // imgui.platform.prepare_render(ui, &window);
+            // let draw_data = imgui_context.render();
+
+            let ui = imgui_context.new_frame();
+
+            {
+                let window = ui.window("Hello World");
+                window
+                    .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                    .build(|| {
+                        ui.text("Hello world!");
+                        ui.text("This...is...imgui-rs on WGPU!");
+                        ui.separator();
+                        let mouse_pos = ui.io().mouse_pos;
+                        ui.text(format!(
+                            "Mouse Position: ({:.1},{:.1})",
+                            mouse_pos[0], mouse_pos[1]
+                        ));
+                    });
+
+                let window = ui.window("Hello too");
+                window
+                    .size([400.0, 200.0], Condition::FirstUseEver)
+                    .position([400.0, 200.0], Condition::FirstUseEver)
+                    .build(|| {
+                        ui.text(format!("Frametime: {delta_s:?}"));
+                    });
+
+                ui.show_demo_window(&mut imgui.demo_open);
+            }
+
+            if imgui.last_cursor != ui.mouse_cursor() {
+                imgui.last_cursor = ui.mouse_cursor();
+                imgui.platform.prepare_render(ui, &self.window);
+            }
+
+            imgui
+                .renderer
+                .render(
+                    imgui.context.render(),
+                    &self.queue,
+                    &self.device,
+                    &mut render_pass,
+                )
+                .expect("Rendering failed");
+
             // render_pass.
         }
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
+
         output.present();
 
         Ok(())
@@ -718,7 +778,6 @@ impl State {
             platform,
             renderer,
             clear_color,
-            last_render_time: Instant::now(),
             last_cursor: None,
             demo_open: true,
         });
@@ -798,8 +857,6 @@ impl ApplicationHandler for App {
         let window = state.window.clone();
         if window_id == window.id() {
             state.input(&event);
-            let imgui = state.imgui.as_mut().unwrap();
-            let mut imgui_context = &mut imgui.context;
             match &event {
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::CloseRequested
@@ -819,97 +876,9 @@ impl ApplicationHandler for App {
                 WindowEvent::ScaleFactorChanged { .. } => state.resize(window.inner_size()),
 
                 WindowEvent::RedrawRequested => {
-                    let delta_s = imgui.last_render_time.elapsed();
+                    let delta_s = state.last_render_time.elapsed();
                     let now = instant::Instant::now();
-                    let dt = now - imgui.last_render_time;
-
-                    imgui_context.io_mut().update_delta_time(dt);
-                    imgui.last_render_time = now;
-
-                    let frame = match state.surface.get_current_texture() {
-                        Ok(frame) => frame,
-                        Err(e) => {
-                            eprintln!("dropped frame: {e:?}");
-                            return;
-                        }
-                    };
-
-                    imgui
-                        .platform
-                        .prepare_frame(imgui_context.io_mut(), &window)
-                        .expect("Failed to prepare frame");
-
-                    // imgui.platform.prepare_render(ui, &window);
-                    // let draw_data = imgui_context.render();
-
-                    let ui = imgui_context.new_frame();
-
-                    {
-                        let window = ui.window("Hello World");
-                        window
-                            .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                            .build(|| {
-                                ui.text("Hello world!");
-                                ui.text("This...is...imgui-rs on WGPU!");
-                                ui.separator();
-                                let mouse_pos = ui.io().mouse_pos;
-                                ui.text(format!(
-                                    "Mouse Position: ({:.1},{:.1})",
-                                    mouse_pos[0], mouse_pos[1]
-                                ));
-                            });
-
-                        let window = ui.window("Hello too");
-                        window
-                            .size([400.0, 200.0], Condition::FirstUseEver)
-                            .position([400.0, 200.0], Condition::FirstUseEver)
-                            .build(|| {
-                                ui.text(format!("Frametime: {delta_s:?}"));
-                            });
-
-                        ui.show_demo_window(&mut imgui.demo_open);
-                    }
-
-                    let mut encoder: wgpu::CommandEncoder = state
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-                    if imgui.last_cursor != ui.mouse_cursor() {
-                        imgui.last_cursor = ui.mouse_cursor();
-                        imgui.platform.prepare_render(ui, &state.window);
-                    }
-
-                    let view = frame
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default());
-
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: None,
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(imgui.clear_color),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    });
-
-                    imgui
-                        .renderer
-                        .render(
-                            imgui.context.render(),
-                            &state.queue,
-                            &state.device,
-                            &mut rpass,
-                        )
-                        .expect("Rendering failed");
-                    drop(rpass);
-                    state.queue.submit(Some(encoder.finish()));
-                    frame.present();
+                    let dt = now - state.last_render_time;
 
                     state.update(dt);
                     match state.render() {
@@ -923,6 +892,97 @@ impl ApplicationHandler for App {
                         // All other errors (Outdated, Timeout) should be resolved by the next frame
                         Err(e) => eprintln!("{:?}", e),
                     }
+
+                    // let imgui = state.imgui.as_mut().unwrap();
+                    // let mut imgui_context = &mut imgui.context;
+
+                    // imgui_context.io_mut().update_delta_time(dt);
+                    // state.last_render_time = now;
+
+                    // let frame = match state.surface.get_current_texture() {
+                    //     Ok(frame) => frame,
+                    //     Err(e) => {
+                    //         eprintln!("dropped frame: {e:?}");
+                    //         return;
+                    //     }
+                    // };
+
+                    // imgui
+                    //     .platform
+                    //     .prepare_frame(imgui_context.io_mut(), &window)
+                    //     .expect("Failed to prepare frame");
+
+                    // // imgui.platform.prepare_render(ui, &window);
+                    // // let draw_data = imgui_context.render();
+
+                    // let ui = imgui_context.new_frame();
+
+                    // {
+                    //     let window = ui.window("Hello World");
+                    //     window
+                    //         .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                    //         .build(|| {
+                    //             ui.text("Hello world!");
+                    //             ui.text("This...is...imgui-rs on WGPU!");
+                    //             ui.separator();
+                    //             let mouse_pos = ui.io().mouse_pos;
+                    //             ui.text(format!(
+                    //                 "Mouse Position: ({:.1},{:.1})",
+                    //                 mouse_pos[0], mouse_pos[1]
+                    //             ));
+                    //         });
+
+                    //     let window = ui.window("Hello too");
+                    //     window
+                    //         .size([400.0, 200.0], Condition::FirstUseEver)
+                    //         .position([400.0, 200.0], Condition::FirstUseEver)
+                    //         .build(|| {
+                    //             ui.text(format!("Frametime: {delta_s:?}"));
+                    //         });
+
+                    //     ui.show_demo_window(&mut imgui.demo_open);
+                    // }
+
+                    // let mut encoder: wgpu::CommandEncoder = state
+                    //     .device
+                    //     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                    // if imgui.last_cursor != ui.mouse_cursor() {
+                    //     imgui.last_cursor = ui.mouse_cursor();
+                    //     imgui.platform.prepare_render(ui, &state.window);
+                    // }
+
+                    // let view = frame
+                    //     .texture
+                    //     .create_view(&wgpu::TextureViewDescriptor::default());
+
+                    // let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    //     label: None,
+                    //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    //         view: &view,
+                    //         resolve_target: None,
+                    //         ops: wgpu::Operations {
+                    //             load: wgpu::LoadOp::Clear(imgui.clear_color),
+                    //             store: wgpu::StoreOp::Store,
+                    //         },
+                    //     })],
+                    //     depth_stencil_attachment: None,
+                    //     timestamp_writes: None,
+                    //     occlusion_query_set: None,
+                    // });
+
+                    // imgui
+                    //     .renderer
+                    //     .render(
+                    //         imgui.context.render(),
+                    //         &state.queue,
+                    //         &state.device,
+                    //         &mut rpass,
+                    //     )
+                    //     .expect("Rendering failed");
+                    // drop(rpass);
+                    // state.queue.submit(Some(encoder.finish()));
+                    // frame.present();
                 }
                 _ => {}
             }
