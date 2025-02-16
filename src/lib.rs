@@ -6,6 +6,7 @@ mod model;
 mod resources;
 mod texture;
 mod world;
+mod utils;
 use camera::{Camera, CameraController, Projection};
 use cgmath::{num_traits::float, prelude::*};
 use imgui::sys::ImGuiKey_J;
@@ -665,65 +666,71 @@ impl State {
             }
 
             // render imgui
-            let imgui = self.imgui.as_mut().unwrap();
-            let mut imgui_context = &mut imgui.context;
-            let delta_s = self.last_render_time.elapsed();
+            let render_imgui = true;
+            if render_imgui {
+                let imgui = self.imgui.as_mut().unwrap();
+                let mut imgui_context = &mut imgui.context;
+                let delta_s = self.last_render_time.elapsed();
 
-            // let frame = self.surface.get_current_texture().unwrap();
+                // let frame = self.surface.get_current_texture().unwrap();
 
-            imgui
-                .platform
-                .prepare_frame(imgui_context.io_mut(), &self.window)
-                .expect("Failed to prepare frame");
+                imgui
+                    .platform
+                    .prepare_frame(imgui_context.io_mut(), &self.window)
+                    .expect("Failed to prepare frame");
 
-            // imgui.platform.prepare_render(ui, &window);
-            // let draw_data = imgui_context.render();
+                // imgui.platform.prepare_render(ui, &window);
+                // let draw_data = imgui_context.render();
 
-            let ui = imgui_context.new_frame();
+                let ui = imgui_context.frame();
 
-            {
-                let window = ui.window("Hello World");
-                window
-                    .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                    .build(|| {
-                        ui.text("Hello world!");
-                        ui.text("This...is...imgui-rs on WGPU!");
-                        ui.separator();
-                        let mouse_pos = ui.io().mouse_pos;
-                        ui.text(format!(
-                            "Mouse Position: ({:.1},{:.1})",
-                            mouse_pos[0], mouse_pos[1]
-                        ));
-                    });
+                {
+                    let window = ui.window("Hello World");
+                    window
+                        .size([300.0, 100.0], imgui::Condition::FirstUseEver)
+                        .build(|| {
+                            ui.text("Hello world!");
+                            ui.text("This...is...imgui-rs on WGPU!");
+                            ui.separator();
+                            let mouse_pos = 
+                            // self.imgui.as_ref().unwrap().context.io().mouse_pos;
+                            ui.io().mouse_pos;
+                            // println!("{:?}", mouse_pos);
+                            ui.text(format!(
+                                "Mouse Position: ({:.1},{:.1})",
+                                mouse_pos[0], mouse_pos[1]
+                            ));
+                        });
 
-                let window = ui.window("Hello too");
-                window
-                    .size([400.0, 200.0], Condition::FirstUseEver)
-                    .position([400.0, 200.0], Condition::FirstUseEver)
-                    .build(|| {
-                        ui.text(format!("Frametime: {delta_s:?}"));
-                    });
+                    let window = ui.window("Hello too");
+                    window
+                        .size([400.0, 200.0], Condition::FirstUseEver)
+                        .position([400.0, 200.0], Condition::FirstUseEver)
+                        .build(|| {
+                            ui.text(format!("Frametime: {delta_s:?}"));
+                        });
 
-                ui.show_demo_window(&mut imgui.demo_open);
+                    ui.show_demo_window(&mut imgui.demo_open);
+                }
+
+                if imgui.last_cursor != ui.mouse_cursor() {
+                    imgui.last_cursor = ui.mouse_cursor();
+                    imgui.platform.prepare_render(ui, &self.window);
+                }
+
+                imgui
+                    .renderer
+                    .render(
+                        imgui.context.render(),
+                        &self.queue,
+                        &self.device,
+                        &mut render_pass,
+                    )
+                    .expect("Rendering failed");
+
+                // render_pass.
             }
-
-            if imgui.last_cursor != ui.mouse_cursor() {
-                imgui.last_cursor = ui.mouse_cursor();
-                imgui.platform.prepare_render(ui, &self.window);
-            }
-
-            imgui
-                .renderer
-                .render(
-                    imgui.context.render(),
-                    &self.queue,
-                    &self.device,
-                    &mut render_pass,
-                )
-                .expect("Rendering failed");
-
-            // render_pass.
-        }
+    }
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -833,16 +840,16 @@ impl ApplicationHandler for App {
         device_id: DeviceId,
         event: DeviceEvent,
     ) {
+        let state = self.state.as_mut().unwrap();
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                if self.state.as_ref().unwrap().mouse_pressed {
-                    self.state
-                        .as_mut()
-                        .unwrap()
-                        .camera_controller
+                if state.mouse_pressed {
+
+                    state.camera_controller
                         .process_mouse(delta.0, delta.1)
                 }
             }
+            DeviceEvent::Removed => {},
             _ => {}
         }
     }
@@ -876,9 +883,16 @@ impl ApplicationHandler for App {
                 WindowEvent::ScaleFactorChanged { .. } => state.resize(window.inner_size()),
 
                 WindowEvent::RedrawRequested => {
+                    let imgui = state.imgui.as_mut().unwrap();
+                    let mut imgui_context = &mut imgui.context;
+
                     let delta_s = state.last_render_time.elapsed();
                     let now = instant::Instant::now();
                     let dt = now - state.last_render_time;
+                    state.last_render_time = now;
+                    // printy!("dt", dt);
+                    imgui_context.io_mut().update_delta_time(dt);
+                    // println!("{:?}", imgui_context.io_mut().framerate);
 
                     state.update(dt);
                     match state.render() {
