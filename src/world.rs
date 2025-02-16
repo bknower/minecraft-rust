@@ -436,189 +436,207 @@ impl Chunk {
         let mut indices: Vec<u32> = vec![];
 
         // greedy meshing
+        let meshing_algorithm = "naive";
+        match meshing_algorithm {
+            "greedy" => {
+                // the problem is that we don't recheck the ranges while growing, so
+                // they could maybe grow into the other ranges
 
-        // the problem is that we don't recheck the ranges while growing, so
-        // they could maybe grow into the other ranges
+                let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
+                    .flat_map(|x| {
+                        (0..CHUNK_SIZE_Y)
+                            .flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
+                    })
+                    .collect();
 
-        let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
-            .flat_map(|x| {
-                (0..CHUNK_SIZE_Y).flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
-            })
-            .collect();
+                let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
 
-        let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
+                for coords in coord_vec {
+                    use Block::*;
+                    let (start_x, start_y, start_z) = coords;
+                    let (mut end_x, mut end_y, mut end_z) =
+                        (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
 
-        for coords in coord_vec {
-            use Block::*;
-            let (start_x, start_y, start_z) = coords;
-            let (mut end_x, mut end_y, mut end_z) = (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
+                    let mut block_in_range = |x: usize, y: usize, z: usize| {
+                        ranges.iter().any(|range| {
+                            let &(
+                                range_x_start,
+                                range_y_start,
+                                range_z_start,
+                                range_x_size,
+                                range_y_size,
+                                range_z_size,
+                            ) = range;
 
-            let mut block_in_range = |x: usize, y: usize, z: usize| {
-                ranges.iter().any(|range| {
-                    let &(
-                        range_x_start,
-                        range_y_start,
-                        range_z_start,
-                        range_x_size,
-                        range_y_size,
-                        range_z_size,
-                    ) = range;
+                            let (range_x_end, range_y_end, range_z_end) = (
+                                range_x_start + range_x_size,
+                                range_y_start + range_y_size,
+                                range_z_start + range_z_size,
+                            );
+                            let (after_start_x, after_start_y, after_start_z) = (
+                                start_x >= range_x_start,
+                                start_y >= range_y_start,
+                                start_z >= range_z_start,
+                            );
+                            after_start_x
+                                && start_x < range_x_end
+                                && after_start_y
+                                && start_y < range_y_end
+                                && after_start_z
+                                && start_z < range_z_end
+                        })
+                    };
 
-                    let (range_x_end, range_y_end, range_z_end) = (
-                        range_x_start + range_x_size,
-                        range_y_start + range_y_size,
-                        range_z_start + range_z_size,
-                    );
-                    let (after_start_x, after_start_y, after_start_z) = (
-                        start_x >= range_x_start,
-                        start_y >= range_y_start,
-                        start_z >= range_z_start,
-                    );
-                    after_start_x
-                        && start_x < range_x_end
-                        && after_start_y
-                        && start_y < range_y_end
-                        && after_start_z
-                        && start_z < range_z_end
-                })
-            };
+                    // if this block is not in any of the existing ranges
+                    if !ranges.iter().any(|range| {
+                        let &(
+                            range_x_start,
+                            range_y_start,
+                            range_z_start,
+                            range_x_size,
+                            range_y_size,
+                            range_z_size,
+                        ) = range;
 
-            // if this block is not in any of the existing ranges
-            if !ranges.iter().any(|range| {
-                let &(
-                    range_x_start,
-                    range_y_start,
-                    range_z_start,
-                    range_x_size,
-                    range_y_size,
-                    range_z_size,
-                ) = range;
-
-                let (range_x_end, range_y_end, range_z_end) = (
-                    range_x_start + range_x_size,
-                    range_y_start + range_y_size,
-                    range_z_start + range_z_size,
-                );
-                let (after_start_x, after_start_y, after_start_z) = (
-                    start_x >= range_x_start,
-                    start_y >= range_y_start,
-                    start_z >= range_z_start,
-                );
-                if !after_start_x {
-                    end_x = range_x_start;
-                }
-                if !after_start_y {
-                    end_y = range_y_start;
-                }
-                if !after_start_z {
-                    end_z = range_z_start;
-                }
-                after_start_x
-                    && start_x < range_x_end
-                    && after_start_y
-                    && start_y < range_y_end
-                    && after_start_z
-                    && start_z < range_z_end
-            }) {
-                // let start_block = blocks[start_x][start_y][start_z];
-                let start_block = self.get_block(start_x, start_y, start_z);
-                if start_block != Air {
-                    for x in (start_x + 1)..end_x {
-                        // let curr_block = blocks[x][start_y][start_z];
-                        let curr_block = self.get_block(x, start_y, start_z);
-                        if start_block != curr_block {
-                            end_x = x;
-                            break;
+                        let (range_x_end, range_y_end, range_z_end) = (
+                            range_x_start + range_x_size,
+                            range_y_start + range_y_size,
+                            range_z_start + range_z_size,
+                        );
+                        let (after_start_x, after_start_y, after_start_z) = (
+                            start_x >= range_x_start,
+                            start_y >= range_y_start,
+                            start_z >= range_z_start,
+                        );
+                        if !after_start_x {
+                            end_x = range_x_start;
                         }
-                    }
-
-                    'outer: for z in (start_z + 1)..end_z {
-                        for x in start_x..end_x {
-                            // let curr_block = blocks[x][start_y][z];
-                            let curr_block = self.get_block(x, start_y, z);
-                            if start_block != curr_block {
-                                end_z = z;
-                                break 'outer;
-                            }
+                        if !after_start_y {
+                            end_y = range_y_start;
                         }
-                    }
-
-                    'outer: for y in (start_y + 1)..end_y {
-                        for x in start_x..end_x {
-                            for z in start_z..end_z {
-                                // let curr_block = blocks[x][y][z];
-                                let curr_block = self.get_block(x, y, z);
+                        if !after_start_z {
+                            end_z = range_z_start;
+                        }
+                        after_start_x
+                            && start_x < range_x_end
+                            && after_start_y
+                            && start_y < range_y_end
+                            && after_start_z
+                            && start_z < range_z_end
+                    }) {
+                        // let start_block = blocks[start_x][start_y][start_z];
+                        let start_block = self.get_block(start_x, start_y, start_z);
+                        if start_block != Air {
+                            for x in (start_x + 1)..end_x {
+                                // let curr_block = blocks[x][start_y][start_z];
+                                let curr_block = self.get_block(x, start_y, start_z);
                                 if start_block != curr_block {
-                                    end_y = y;
-                                    break 'outer;
+                                    end_x = x;
+                                    break;
+                                }
+                            }
+
+                            'outer: for z in (start_z + 1)..end_z {
+                                for x in start_x..end_x {
+                                    // let curr_block = blocks[x][start_y][z];
+                                    let curr_block = self.get_block(x, start_y, z);
+                                    if start_block != curr_block {
+                                        end_z = z;
+                                        break 'outer;
+                                    }
+                                }
+                            }
+
+                            'outer: for y in (start_y + 1)..end_y {
+                                for x in start_x..end_x {
+                                    for z in start_z..end_z {
+                                        // let curr_block = blocks[x][y][z];
+                                        let curr_block = self.get_block(x, y, z);
+                                        if start_block != curr_block {
+                                            end_y = y;
+                                            break 'outer;
+                                        }
+                                    }
+                                }
+                            }
+
+                            let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
+                            // add adjusted mesh
+                            add_combined_mesh(
+                                start_block,
+                                coords,
+                                scale,
+                                &mut indices,
+                                &mut vertices,
+                            );
+                            ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
+                        }
+                    }
+                }
+            }
+            "naive" => {
+                // naive meshing
+                for x in 0..CHUNK_SIZE_X {
+                    for y in 0..CHUNK_SIZE_Y {
+                        for z in 0..CHUNK_SIZE_Z {
+                            let block = self.get_block(x, y, z);
+                            use Block::*;
+                            let front = x == 0 || self.get_block(x - 1, y, z) == Air;
+                            let back = x == CHUNK_SIZE_X - 1 || self.get_block(x + 1, y, z) == Air;
+                            let down = y == 0 || self.get_block(x, y - 1, z) == Air;
+                            let up = y == CHUNK_SIZE_Y - 1 || self.get_block(x, y + 1, z) == Air;
+                            let left = z == 0 || self.get_block(x, y, z - 1) == Air;
+                            let right = z == CHUNK_SIZE_Z - 1 || self.get_block(x, y, z + 1) == Air;
+                            // let (front, back, down, up, left, right) = (true, true, true, true, true, true);
+                            let atlas_coords = block.get_atlas_coords();
+
+                            if let Some(atlas_coords) = atlas_coords {
+                                // let chunk_position =
+                                // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
+                                let position = [x as f32, y as f32, z as f32];
+                                let texture_length = atlas_coords.len();
+                                let face_tuples = [
+                                    (left, LEFT_VERTICES, LEFT_INDICES),
+                                    (right, RIGHT_VERTICES, RIGHT_INDICES),
+                                    (down, DOWN_VERTICES, DOWN_INDICES),
+                                    (up, UP_VERTICES, UP_INDICES),
+                                    (front, FRONT_VERTICES, FRONT_INDICES),
+                                    (back, BACK_VERTICES, BACK_INDICES),
+                                ];
+
+                                for (i, (direction, direction_vertices, direction_indices)) in
+                                    face_tuples.into_iter().enumerate()
+                                {
+                                    // let face_tuple = face_tuples.get(i).unwrap();
+                                    // let (direction, direction_vertices, direction_indices) = face_tuple;
+                                    // let atlas_coords = if texture_length == 1 {
+                                    //     atlas_coords.first().unwrap()
+                                    // } else {
+                                    //     atlas_coords.get(i).unwrap()
+                                    // };
+                                    let atlas_coords = atlas_coords.get(i).unwrap();
+                                    // println!("{:?}", atlas_coords);
+                                    if direction {
+                                        let starting_length = vertices.len();
+                                        vertices.append(&mut add_position_to_vertices(
+                                            &direction_vertices,
+                                            position.into(),
+                                            (*atlas_coords).into(),
+                                        ));
+                                        add_indices(
+                                            direction_indices,
+                                            starting_length,
+                                            &mut indices,
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
-
-                    let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
-                    // add adjusted mesh
-                    add_combined_mesh(start_block, coords, scale, &mut indices, &mut vertices);
-                    ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                 }
             }
+            _ => unreachable!(),
         }
-
-        // naive meshing
-        // for x in 0..CHUNK_SIZE_X {
-        //     for y in 0..CHUNK_SIZE_Y {
-        //         for z in 0..CHUNK_SIZE_Z {
-        //             let block = blocks[x][y][z];
-        //             use Block::*;
-        //             let front = x == 0 || blocks[x - 1][y][z] == Air;
-        //             let back = x == CHUNK_SIZE_X - 1 || blocks[x + 1][y][z] == Air;
-        //             let down = y == 0 || blocks[x][y - 1][z] == Air;
-        //             let up = y == CHUNK_SIZE_Y - 1 || blocks[x][y + 1][z] == Air;
-        //             let left = z == 0 || blocks[x][y][z - 1] == Air;
-        //             let right = z == CHUNK_SIZE_Z - 1 || blocks[x][y][z + 1] == Air;
-        //             // let (front, back, down, up, left, right) = (true, true, true, true, true, true);
-        //             let atlas_coords = block.get_atlas_coords();
-
-        //             if let Some(atlas_coords) = atlas_coords {
-        //                 // let chunk_position =
-        //                 // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
-        //                 let position = [x as f32, y as f32, z as f32];
-        //                 let texture_length = atlas_coords.len();
-        //                 let face_tuples = [
-        //                     (left, LEFT_VERTICES, LEFT_INDICES),
-        //                     (right, RIGHT_VERTICES, RIGHT_INDICES),
-        //                     (down, DOWN_VERTICES, DOWN_INDICES),
-        //                     (up, UP_VERTICES, UP_INDICES),
-        //                     (front, FRONT_VERTICES, FRONT_INDICES),
-        //                     (back, BACK_VERTICES, BACK_INDICES),
-        //                 ];
-
-        //                 for (i, (direction, direction_vertices, direction_indices)) in
-        //                     face_tuples.into_iter().enumerate()
-        //                 {
-        //                     // let face_tuple = face_tuples.get(i).unwrap();
-        //                     // let (direction, direction_vertices, direction_indices) = face_tuple;
-        //                     // let atlas_coords = if texture_length == 1 {
-        //                     //     atlas_coords.first().unwrap()
-        //                     // } else {
-        //                     //     atlas_coords.get(i).unwrap()
-        //                     // };
-        //                     let atlas_coords = atlas_coords.get(i).unwrap();
-        //                     // println!("{:?}", atlas_coords);
-        //                     if direction {
-        //                         let starting_length = vertices.len();
-        //                         vertices.append(&mut add_position_to_vertices(
-        //                             &direction_vertices,
-        //                             position.into(),
-        //                             (*atlas_coords).into(),
-        //                         ));
-        //                         add_indices(direction_indices, starting_length, &mut indices);
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
 
         // println!("indices: {:?}", indices);
 
