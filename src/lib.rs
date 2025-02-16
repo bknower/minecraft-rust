@@ -38,6 +38,7 @@ use winit::{
     // window::WindowBuilder,
     window::WindowAttributes,
 };
+use world::MESHING_ALGORITHMS;
 
 use crate::model::Material;
 use crate::resources::load_texture;
@@ -553,10 +554,12 @@ impl State {
         // if updated {
         let mut chunk_instances = vec![];
 
-        let mut vertices = 0;
+        let mut triangles = 0;
         for chunk in self.world.chunks.as_slice() {
             if let Some(mesh) = &chunk.mesh {
-                vertices += mesh.vertex_buffer.size();
+                let chunk_triangles = mesh.vertex_buffer.size() / 3;
+                self.world.world_stats.add_chunk_triangles(chunk_triangles);
+                triangles += chunk_triangles;
                 let position = cgmath::Vector3 {
                     x: ((chunk.chunk_x as f32 - 0.5) * world::CHUNK_SIZE_X as f32),
                     y: 0.0,
@@ -569,7 +572,7 @@ impl State {
                 chunk_instances.push(Instance { position, rotation });
             }
         }
-        self.world.world_stats.vertices = vertices;
+        self.world.world_stats.triangles = triangles;
         // let position = cgmath::Vector3 {
         // 	x: 0.0,
         // 	y: 0.0,
@@ -694,10 +697,7 @@ impl State {
 
                 let ui = imgui_context.new_frame();
 
-                fn render_slider<T>(ui: &Ui, label: &str, value: &mut T, min: T, max: T, width: f32)
-                where
-                    T: DataTypeKind, // `imgui-rs` requires Numeric trait (i32, f32, etc.)
-                {
+                fn prerender_imgui_element(ui: &Ui, label: &str, width: f32) {
                     ui.text(format!("{}: ", label));
                     ui.same_line();
                     // ui.push_item_width(width);
@@ -709,10 +709,14 @@ impl State {
                     ui.set_cursor_pos([right_align_x, cursor_y]);
 
                     ui.set_next_item_width(width);
+                }
 
+                fn render_slider<T>(ui: &Ui, label: &str, value: &mut T, min: T, max: T, width: f32)
+                where
+                    T: DataTypeKind, // `imgui-rs` requires Numeric trait (i32, f32, etc.)
+                {
+                    prerender_imgui_element(ui, label, width);
                     ui.slider("##slider", min, max, value);
-
-                    // ui.pop_item_width(); // Restore width to default
                 }
 
                 {
@@ -727,12 +731,12 @@ impl State {
                                 "FPS" => ui.io().framerate,
                                 "Chunks loaded" => self.world.chunks.len(),
                                 "Last mesh time" => self.world.world_stats.mesh_gen_times.last().unwrap_or(&0.0),
-                                "Average mesh time (last 20)" => self.world.world_stats.get_mesh_gen_avg(),                                
+                                "Average mesh time (last 20)" => self.world.world_stats.get_mesh_gen_time_avg(),                                
                                 "Last chunk time" => self.world.world_stats.chunk_gen_times.last().unwrap_or(&0.0),
-                                "Average chunk time (last 20)" => self.world.world_stats.get_chunk_gen_avg(),
-                                "Triangles" => (self.world.world_stats.vertices / 3).to_formatted_string(&Locale::en).to_string()
+                                "Average chunk time (last 20)" => self.world.world_stats.get_chunk_gen_time_avg(),
+                                "Total Tris" => (self.world.world_stats.triangles).to_formatted_string(&Locale::en).to_string(),
+                                "Average Tris per chunk" => self.world.world_stats.get_chunk_triangles_avg()
                             };
-                            printy!((self.world.world_stats.vertices / 3).to_formatted_string(&Locale::en));
 
                             for (name, value) in &prints {
                                 let left_text = format!("{:}:", name);
@@ -752,7 +756,12 @@ impl State {
 
                             }
 
-                            render_slider(ui, "Render Distance", &mut self.world.render_distance, 0, 100, 150.0)
+                            let width = 150.0;
+
+                            render_slider(ui, "Render Distance", &mut self.world.render_distance, 0, 100, width);
+
+                            prerender_imgui_element(ui, "Meshing Algorithm", width);
+                            ui.combo_simple_string("##combo", &mut self.world.meshing_algorithm, &MESHING_ALGORITHMS);
 
 
                         });

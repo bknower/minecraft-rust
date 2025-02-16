@@ -255,9 +255,9 @@ impl Chunk {
         self.blocks[xyz_to_index(x, y, z)] = block
     }
 
-    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, meshing_algorithm: usize) {
         if let None = self.mesh {
-            let mesh = self.to_mesh(device, queue);
+            let mesh = self.to_mesh(device, queue, meshing_algorithm);
             self.mesh = Some(mesh);
         }
     }
@@ -266,7 +266,7 @@ impl Chunk {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        // layout: &wgpu::BindGroupLayout,
+        meshing_algorithm: usize, // layout: &wgpu::BindGroupLayout,
     ) -> Mesh {
         let blocks = self.blocks;
 
@@ -437,8 +437,7 @@ impl Chunk {
         let mut indices: Vec<u32> = vec![];
 
         // greedy meshing
-        let meshing_algorithm = "naive";
-        match meshing_algorithm {
+        match *MESHING_ALGORITHMS.get(meshing_algorithm).unwrap() {
             "greedy" => {
                 // the problem is that we don't recheck the ranges while growing, so
                 // they could maybe grow into the other ranges
@@ -674,37 +673,38 @@ pub struct World {
     // chunks: Vec<Vec<Chunk>>,
     pub chunks: Vec<Chunk>,
     pub render_distance: i32,
+    pub last_render_distance: i32,
     pub perlin: Perlin,
     pub position: Point3<f32>,
     pub chunks_to_generate: VecDeque<Point2<i32>>,
     pub world_stats: WorldStats,
+    pub meshing_algorithm: usize,
+    pub last_meshing_algorithm: usize,
 }
 
 // macro written by chatgpt to auto implement adding new times and getting
 // averages from times
 macro_rules! impl_stat_methods {
-    ($($field:ident => $short_name:ident),*) => {
+    ($($field:ident => $short_name:ident: $type:ty),*) => {
         impl WorldStats {
             $(
-                // Function to add a time entry
                 paste! {
-                    pub fn [<add_ $short_name _time>](&mut self, time: f64) {
+                    pub fn [<add_ $short_name>](&mut self, value: $type) {
                         if self.$field.len() < self.rolling_average_length {
-                            self.$field.push(time);
+                            self.$field.push(value);
                         } else {
                             self.$field.remove(0);
-                            self.$field.push(time);
+                            self.$field.push(value);
                         }
                     }
                 }
 
-                // Function to get the average
                 paste! {
                     pub fn [<get_ $short_name _avg>](&self) -> f64 {
                         if self.$field.is_empty() {
                             0.0
                         } else {
-                            self.$field.iter().sum::<f64>() / self.$field.len() as f64
+                            self.$field.iter().map(|&x| x as f64).sum::<f64>() / self.$field.len() as f64
                         }
                     }
                 }
@@ -717,7 +717,8 @@ pub struct WorldStats {
     pub rolling_average_length: usize,
     pub chunk_gen_times: Vec<f64>,
     pub mesh_gen_times: Vec<f64>,
-    pub vertices: u64,
+    pub triangles: u64,
+    pub chunk_triangles: Vec<u64>,
 }
 
 impl Default for WorldStats {
@@ -726,14 +727,16 @@ impl Default for WorldStats {
             rolling_average_length: 20,
             chunk_gen_times: vec![],
             mesh_gen_times: vec![],
-            vertices: 0,
+            triangles: 0,
+            chunk_triangles: vec![],
         }
     }
 }
 
 impl_stat_methods!(
-    chunk_gen_times => chunk_gen,
-    mesh_gen_times => mesh_gen
+    chunk_gen_times => chunk_gen_time: f64,
+    mesh_gen_times => mesh_gen_time: f64,
+    chunk_triangles => chunk_triangles: u64
 );
 
 // impl WorldStats {
@@ -759,6 +762,8 @@ fn position_to_chunk_position(p: Point3<f32>) -> Point2<i32> {
     .into()
 }
 
+pub const MESHING_ALGORITHMS: [&str; 2] = ["naive", "greedy"];
+
 impl World {
     pub fn new(seed: u32) -> Self {
         let perlin = Perlin::new(seed);
@@ -768,10 +773,13 @@ impl World {
         Self {
             chunks,
             render_distance,
+            last_render_distance: 0,
             perlin,
             position: (0.0, 0.0, 0.0).into(),
             chunks_to_generate: VecDeque::new(),
             world_stats: WorldStats::default(),
+            meshing_algorithm: 0,
+            last_meshing_algorithm: 0,
         }
     }
 
@@ -784,6 +792,14 @@ impl World {
         let mut updated = false;
         let old_chunk_position = position_to_chunk_position(self.position);
         let chunk_position = position_to_chunk_position(position);
+        if self.last_meshing_algorithm != self.meshing_algorithm
+            || self.last_render_distance != self.render_distance
+        {
+            self.last_meshing_algorithm = self.meshing_algorithm;
+            self.last_render_distance = self.render_distance;
+            self.chunks_to_generate.clear();
+            self.chunks.clear()
+        }
         if old_chunk_position != chunk_position || self.chunks.is_empty() {
             self.position = position;
             self.chunks_to_generate.clear();
@@ -879,18 +895,18 @@ impl World {
             let chunk_end = now();
 
             let mesh_start = now();
-            new_chunk.update(device, queue);
+            new_chunk.update(device, queue, self.meshing_algorithm);
             let mesh_end = now();
             self.chunks.push(new_chunk);
             self.world_stats.add_chunk_gen_time(chunk_end - chunk_start);
             self.world_stats.add_mesh_gen_time(mesh_end - mesh_start);
-            println!("new_chunk: {:?}", chunk_coord);
+            // println!("new_chunk: {:?}", chunk_coord);
 
-            println!(
-                "chunk time: {:?}ms, mesh time: {:?}ms",
-                chunk_end - chunk_start,
-                mesh_end - mesh_start,
-            );
+            // println!(
+            //     "chunk time: {:?}ms, mesh time: {:?}ms",
+            //     chunk_end - chunk_start,
+            //     mesh_end - mesh_start,
+            // );
         }
         updated
     }
