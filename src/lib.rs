@@ -682,7 +682,7 @@ impl State {
                 // imgui.platform.prepare_render(ui, &window);
                 // let draw_data = imgui_context.render();
 
-                let ui = imgui_context.frame();
+                let ui = imgui_context.new_frame();
 
                 {
                     let window = ui.window("Hello World");
@@ -841,6 +841,10 @@ impl ApplicationHandler for App {
         event: DeviceEvent,
     ) {
         let state = self.state.as_mut().unwrap();
+        let window = &state.window;
+        let imgui = state.imgui.as_mut().unwrap();
+        let mut imgui_context = &mut imgui.context;
+
         match event {
             DeviceEvent::MouseMotion { delta } => {
                 if state.mouse_pressed {
@@ -852,6 +856,11 @@ impl ApplicationHandler for App {
             DeviceEvent::Removed => {},
             _ => {}
         }
+        imgui.platform.handle_event::<()>(
+            imgui.context.io_mut(),
+            window,
+            &Event::DeviceEvent { device_id, event },
+        );
     }
 
     fn window_event(
@@ -862,8 +871,41 @@ impl ApplicationHandler for App {
     ) {
         let state = self.state.as_mut().unwrap();
         let window = state.window.clone();
+        // {
+        //     let imgui = state.imgui.as_mut().unwrap();
+        //     let mut imgui_context = &mut imgui.context;
+        //     imgui.platform.handle_event(
+        //         imgui_context.io_mut(),
+        //         &window,
+        //         &Event::<WindowEvent>::WindowEvent {
+        //             window_id,
+        //             event,
+        //         }
+        //     );
+
+        // }
+        // return;
+
+
+
+        let imgui = state.imgui.as_mut().unwrap();
+        let mut imgui_context = &mut imgui.context;
+        imgui.platform.handle_event(
+            imgui_context.io_mut(),
+            &window,
+            &Event::<WindowEvent>::WindowEvent {
+                window_id,
+                event: event.clone(),
+            }
+        );
+
+
+
         if window_id == window.id() {
-            state.input(&event);
+            if !imgui_context.io().want_capture_mouse {
+                state.input(&event);
+            }
+            
             match &event {
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::CloseRequested
@@ -890,9 +932,9 @@ impl ApplicationHandler for App {
                     let now = instant::Instant::now();
                     let dt = now - state.last_render_time;
                     state.last_render_time = now;
-                    // printy!("dt", dt);
                     imgui_context.io_mut().update_delta_time(dt);
                     // println!("{:?}", imgui_context.io_mut().framerate);
+
 
                     state.update(dt);
                     match state.render() {
@@ -1005,6 +1047,16 @@ impl ApplicationHandler for App {
         //     platform.handle_event(imgui.io_mut(), &window, &event);
         // }
         // _ => {}
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: ()) {
+        let state = self.state.as_mut().unwrap();
+        let imgui = state.imgui.as_mut().unwrap();
+        imgui.platform.handle_event::<()>(
+            imgui.context.io_mut(),
+            &state.window,
+            &Event::UserEvent(event),
+        );
     }
 }
 
