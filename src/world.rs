@@ -1381,26 +1381,6 @@ impl World {
                 }
             }
 
-            // chunks_in_render_distance
-            //     .iter()
-            //     .for_each(|chunk| println!("chunk: {:?}", chunk));
-
-            // let mut new_chunks: Vec<Chunk> = vec![];
-
-            // copy the already existing chunks to the new chunk array
-            // while let Some(chunk) = self.chunks.pop() {
-            //     if let Some(index) = chunks_in_render_distance.iter().position(|chunk_coord| {
-            //         chunk.chunk_x == chunk_coord.x && chunk.chunk_z == chunk_coord.y
-            //     }) {
-            //         chunks_in_render_distance.swap_remove(index);
-            //         println!(
-            //             "copied chunk: Point2 [{:?}, {:?}]",
-            //             chunk.chunk_x, chunk.chunk_z
-            //         );
-            //         new_chunks.push(chunk);
-            //     }
-            // }
-
             // iterate over the remaining chunks (should be the newly rendered
             // ones)
             let mut chunks_vec: Vec<Point2<i32>> = chunks_in_render_distance.into_iter().collect();
@@ -1410,20 +1390,6 @@ impl World {
                 da.cmp(&db)
             });
             self.chunks_to_generate.extend(chunks_vec);
-
-            // let now = instant::Instant::now();
-            // let dt = now - last_render_time;
-            // last_render_time = now;
-            // chunks_in_render_distance
-            //     .into_iter()
-            //     .for_each(|chunk_coord| {
-            //         let new_chunk = Chunk::new(chunk_coord.x, chunk_coord.y, self.perlin);
-            //         new_chunks.push(new_chunk);
-            //         println!("new_chunk: {:?}", chunk_coord);
-            //     });
-            // for chunk in &mut self.chunks {
-            //     chunk.update(device, queue);
-            // }
             updated = true;
         }
         let start = instant::Instant::now();
@@ -1444,13 +1410,6 @@ impl World {
             self.chunks.push(new_chunk);
             self.world_stats.add_chunk_gen_time(chunk_end - chunk_start);
             self.world_stats.add_mesh_gen_time(mesh_end - mesh_start);
-            // println!("new_chunk: {:?}", chunk_coord);
-
-            // println!(
-            //     "chunk time: {:?}ms, mesh time: {:?}ms",
-            //     chunk_end - chunk_start,
-            //     mesh_end - mesh_start,
-            // );
         }
         updated
     }
