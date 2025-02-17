@@ -4,6 +4,7 @@ use std::{
     hash::Hash,
     mem::size_of,
 };
+use strum::IntoEnumIterator;
 
 use cgmath::{InnerSpace, Point2, Point3, Vector2, Vector3};
 use instant::{now, Duration};
@@ -13,6 +14,7 @@ use tobj::Material;
 use crate::{
     block::Block,
     model::{Mesh, Model, ModelVertex},
+    printy,
 };
 use wgpu::{naga::FastHashSet, util::DeviceExt, Device};
 
@@ -48,6 +50,20 @@ enum Side {
     UP,
     BACK,
     FRONT,
+}
+
+impl Side {
+    /// Convert enum to the corresponding index for atlas_coords and face tuples.
+    fn as_index(&self) -> usize {
+        match self {
+            Side::LEFT => 0,
+            Side::RIGHT => 1,
+            Side::DOWN => 2,
+            Side::UP => 3,
+            Side::FRONT => 4,
+            Side::BACK => 5,
+        }
+    }
 }
 
 const V0: [f32; 3] = [0.0, 0.0, 0.0];
@@ -209,6 +225,63 @@ const UP_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
 const FRONT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
 const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
 
+const QUAD_VERTICES: [&[ModelVertex; 4]; 6] = [
+    &LEFT_VERTICES,  // 0: -X (left)
+    &RIGHT_VERTICES, // 1: +X (right)
+    &DOWN_VERTICES,  // 2: -Y (down)
+    &UP_VERTICES,    // 3: +Y (up)
+    &FRONT_VERTICES, // 4: -Z (front)
+    &BACK_VERTICES,  // 5: +Z (back)
+];
+
+const QUAD_INDICES: [&[u32; 6]; 6] = [
+    &LEFT_INDICES,  // 0: -X (left)
+    &RIGHT_INDICES, // 1: +X (right)
+    &DOWN_INDICES,  // 2: -Y (down)
+    &UP_INDICES,    // 3: +Y (up)
+    &FRONT_INDICES, // 4: -Z (front)
+    &BACK_INDICES,  // 5: +Z (back)
+];
+
+/// Adds a face (4 vertices) as two triangles to the provided buffers.
+///
+/// * `face_verts`: The base vertex data for this face (e.g. LEFT_VERTICES).
+/// * `scale`:      Uniform scale factor to apply to the positions.
+/// * `offset`:     The translation to apply (e.g. block position).
+/// * `atlas`:      Atlas UV offset (if needed per face) or you can set it internally.
+/// * `vertices`:   The vertex buffer you are building.
+/// * `indices`:    The index buffer you are building.
+fn add_face_as_tris(
+    face_verts: &[ModelVertex; 4],
+    scale: f32,
+    offset: [f32; 3],
+    atlas: [f32; 2],
+    vertices: &mut Vec<ModelVertex>,
+    indices: &mut Vec<u32>,
+) {
+    let start_index = vertices.len() as u32;
+
+    for &base in face_verts.iter() {
+        let mut v = base;
+        v.position = [
+            offset[0] + v.position[0] * scale,
+            offset[1] + v.position[1] * scale,
+            offset[2] + v.position[2] * scale,
+        ];
+        v.atlas_coords = atlas;
+        vertices.push(v);
+    }
+
+    indices.extend_from_slice(&[
+        start_index,
+        start_index + 1,
+        start_index + 2,
+        start_index + 2,
+        start_index + 1,
+        start_index + 3,
+    ]);
+}
+
 impl Chunk {
     fn new(chunk_x: i32, chunk_z: i32) -> Self {
         // let mut blocks = [[[Block::Air; CHUNK_SIZE_Z]; CHUNK_SIZE_Y];
@@ -246,13 +319,29 @@ impl Chunk {
         }
     }
 
+    pub fn get_3d<T>(array: &[T], x: usize, y: usize, z: usize) -> T
+    where
+        T: Default,
+        T: Copy,
+    {
+        if x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z {
+            Default::default()
+        } else {
+            array[xyz_to_index(x, y, z)]
+        }
+    }
+
+    pub fn set_3d<T>(array: &mut [T], x: usize, y: usize, z: usize, val: T) {
+        array[xyz_to_index(x, y, z)] = val
+    }
+
     pub fn get_block(&self, x: usize, y: usize, z: usize) -> Block {
         // not sure if this works when these sizes are different
-        self.blocks[xyz_to_index(x, y, z)]
+        Chunk::get_3d(&self.blocks, x, y, z)
     }
     pub fn set_block(&mut self, x: usize, y: usize, z: usize, block: Block) {
         // not sure if this works when these sizes are different
-        self.blocks[xyz_to_index(x, y, z)] = block
+        Chunk::set_3d(&mut self.blocks, x, y, z, block);
     }
 
     pub fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, meshing_algorithm: usize) {
@@ -408,6 +497,57 @@ impl Chunk {
                 }
             }
         }
+
+        fn add_single_face_mesh_2d(
+            block: Block,
+            start_coords: (usize, usize, usize),
+            scale: (usize, usize, usize),
+            face: Side,
+            indices: &mut Vec<u32>,
+            vertices: &mut Vec<ModelVertex>,
+        ) {
+            // printy!(start_coords, scale);
+            let atlas_coords_opt = block.get_atlas_coords();
+            if atlas_coords_opt.is_none() {
+                // If there's no texture data, we can't add anything.
+                return;
+            }
+
+            let atlas_coords = atlas_coords_opt.unwrap();
+            let (start_x, start_y, start_z) = start_coords;
+            let (scale_x, scale_y, scale_z) = scale;
+            let position = [start_x as f32, start_y as f32, start_z as f32];
+
+            // All possible face definitions (vertices and indices):
+            let face_tuples = [
+                (LEFT_VERTICES, LEFT_INDICES),
+                (RIGHT_VERTICES, RIGHT_INDICES),
+                (DOWN_VERTICES, DOWN_INDICES),
+                (UP_VERTICES, UP_INDICES),
+                (FRONT_VERTICES, FRONT_INDICES),
+                (BACK_VERTICES, BACK_INDICES),
+            ];
+
+            // Determine which face we are adding
+            let i = face.as_index();
+            // printy!(i);
+
+            // Retrieve the relevant data for that face
+            let (direction_vertices, direction_indices) = face_tuples[i];
+            let face_atlas_coords = atlas_coords[i];
+
+            // Add the face
+            let starting_length = vertices.len();
+            vertices.append(&mut add_position_and_scale_to_vertices(
+                direction_vertices,
+                position,
+                [scale_x as f32, scale_y as f32, scale_z as f32],
+                face_atlas_coords,
+                i,
+            ));
+            add_indices(direction_indices, starting_length, indices);
+        }
+
         fn add_position_to_vertices(
             verts: &[ModelVertex],
             p: Vector3<f32>,
@@ -437,7 +577,471 @@ impl Chunk {
         let mut indices: Vec<u32> = vec![];
 
         // greedy meshing
+        const CHUNK_SIZE: usize = CHUNK_SIZE_X;
         match *MESHING_ALGORITHMS.get(meshing_algorithm).unwrap() {
+            "greedy4" => {
+                for d in 0..3 {
+                    let u = (d + 1) % 3;
+                    let v = (d + 2) % 3;
+
+                    let mut x = [0, 0, 0];
+                    let mut q = [0, 0, 0];
+                    q[d] = 1;
+
+                    let mut mask = vec![false; CHUNK_SIZE_X * CHUNK_SIZE_Y];
+
+                    for slice in -1..CHUNK_SIZE_X as i32 {
+                        let mut n = 0;
+                        x[d] = slice;
+
+                        // Compute mask
+                        for j in 0..CHUNK_SIZE_Y as i32 {
+                            x[v] = j;
+                            for i in 0..CHUNK_SIZE_X as i32 {
+                                x[u] = i;
+
+                                let block_present =
+                                    self.get_block(x[0] as usize, x[1] as usize, x[2] as usize)
+                                        == Block::Stone;
+                                let neighbor_present = self.get_block(
+                                    (x[0] + q[0]) as usize,
+                                    (x[1] + q[1]) as usize,
+                                    (x[2] + q[2]) as usize,
+                                ) == Block::Stone;
+
+                                mask[n] = block_present != neighbor_present;
+                                n += 1;
+                            }
+                        }
+
+                        x[d] += 1;
+
+                        // Generate faces from mask
+                        n = 0;
+                        for j in 0..CHUNK_SIZE_Y {
+                            let mut i = 0;
+                            while i < CHUNK_SIZE_X {
+                                if mask[n] {
+                                    let mut w = 1;
+                                    while i + w < CHUNK_SIZE_X && mask[n + w] {
+                                        w += 1;
+                                    }
+
+                                    let mut h = 1;
+                                    'outer: while j + h < CHUNK_SIZE_Y {
+                                        for k in 0..w {
+                                            if !mask[n + k + h * CHUNK_SIZE_X] {
+                                                break 'outer;
+                                            }
+                                        }
+                                        h += 1;
+                                    }
+
+                                    let top_left = [i as f32, j as f32, slice as f32];
+
+                                    let mut du = [0.0, 0.0, 0.0];
+                                    du[u] = w as f32;
+
+                                    let mut dv = [0.0, 0.0, 0.0];
+                                    dv[v] = h as f32;
+
+                                    let p0 = top_left;
+                                    let p1 = [
+                                        top_left[0] + du[0],
+                                        top_left[1] + du[1],
+                                        top_left[2] + du[2],
+                                    ];
+                                    let p2 = [
+                                        top_left[0] + dv[0],
+                                        top_left[1] + dv[1],
+                                        top_left[2] + dv[2],
+                                    ];
+                                    let p3 = [
+                                        top_left[0] + du[0] + dv[0],
+                                        top_left[1] + du[1] + dv[1],
+                                        top_left[2] + du[2] + dv[2],
+                                    ];
+
+                                    let uvs = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+
+                                    add_face_as_tris(
+                                        &[
+                                            ModelVertex {
+                                                position: p0,
+                                                tex_coords: uvs[0],
+                                                atlas_coords: [0.0, 0.0],
+                                            },
+                                            ModelVertex {
+                                                position: p1,
+                                                tex_coords: uvs[1],
+                                                atlas_coords: [0.0, 0.0],
+                                            },
+                                            ModelVertex {
+                                                position: p2,
+                                                tex_coords: uvs[2],
+                                                atlas_coords: [0.0, 0.0],
+                                            },
+                                            ModelVertex {
+                                                position: p3,
+                                                tex_coords: uvs[3],
+                                                atlas_coords: [0.0, 0.0],
+                                            },
+                                        ],
+                                        1.0,
+                                        top_left,
+                                        [0.0, 0.0],
+                                        &mut vertices,
+                                        &mut indices,
+                                    );
+
+                                    // Clear mask area
+                                    for row in 0..h {
+                                        let row_offset = (j + row) * CHUNK_SIZE_X;
+                                        for col in 0..w {
+                                            mask[row_offset + (i + col)] = false;
+                                        }
+                                    }
+
+                                    i += w;
+                                    n += w;
+                                } else {
+                                    i += 1;
+                                    n += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "greedy3" => {
+                let directions: [[i32; 3]; 6] = [
+                    [-1, 0, 0], // left
+                    [1, 0, 0],  // right
+                    [0, -1, 0], // down
+                    [0, 1, 0],  // up
+                    [0, 0, -1], // back
+                    [0, 0, 1],  // front
+                ];
+                let mut masks: HashMap<Block, [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z]> =
+                    Default::default();
+                for block_type in Block::iter() {
+                    masks.insert(
+                        block_type,
+                        [false; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z],
+                    );
+                }
+                for (i, block) in self.blocks.iter().enumerate() {
+                    masks.get_mut(block).unwrap()[i] = true;
+                }
+                // currently only rendering stone
+                for block_type in [Block::Stone] {
+                    let mask: &mut [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z] =
+                        masks.get_mut(&block_type).unwrap();
+                    for (i, direction) in directions.iter().enumerate() {
+                        let nonzero_index =
+                            direction.iter().position(|element| *element != 0).unwrap();
+
+                        let iteration_direction = direction[nonzero_index];
+                        printy!(direction, nonzero_index, iteration_direction);
+
+                        let mut slice_index = 0;
+                        while slice_index < CHUNK_SIZE_X {
+                            // dim1 and dim2 are the 2 dimensions that are changing
+                            // as we hold 1 constant
+                            match nonzero_index {
+                                0 => {
+                                    // check for a quad starting at every block
+                                    // in the slice. if we've already visited a
+                                    // block, the mask will be 0
+                                    for y in 0..CHUNK_SIZE_Y {
+                                        for z in 0..CHUNK_SIZE_Z {
+                                            // find width
+                                            let mut width = 0;
+                                            for curr_z in z..CHUNK_SIZE_Z {
+                                                if !Chunk::get_3d(mask, slice_index, y, curr_z) {
+                                                    break;
+                                                }
+                                                width += 1;
+                                                Chunk::set_3d(
+                                                    &mut *mask,
+                                                    slice_index,
+                                                    y,
+                                                    curr_z,
+                                                    false,
+                                                );
+                                            }
+
+                                            let mut height = 0;
+                                            // find height
+                                            if width > 0 {
+                                                height = 1;
+                                                'outer: for curr_y in (y + 1)..CHUNK_SIZE_Y {
+                                                    for curr_z in z..CHUNK_SIZE_Z {
+                                                        if !Chunk::get_3d(
+                                                            mask,
+                                                            slice_index,
+                                                            curr_y,
+                                                            curr_z,
+                                                        ) {
+                                                            break 'outer;
+                                                        }
+                                                    }
+                                                    height += 1;
+                                                    for curr_z in z..CHUNK_SIZE_Z {
+                                                        Chunk::set_3d(
+                                                            &mut *mask,
+                                                            slice_index,
+                                                            curr_y,
+                                                            curr_z,
+                                                            false,
+                                                        )
+                                                    }
+                                                }
+                                                if iteration_direction == 1 {
+                                                    printy!("direction 1");
+                                                    add_single_face_mesh_2d(
+                                                        block_type,
+                                                        (slice_index, y, z),
+                                                        (0, width, height),
+                                                        Side::LEFT,
+                                                        &mut indices,
+                                                        &mut vertices,
+                                                    );
+                                                } else {
+                                                    add_single_face_mesh_2d(
+                                                        block_type,
+                                                        (slice_index, y, z),
+                                                        (0, width, height),
+                                                        Side::RIGHT,
+                                                        &mut indices,
+                                                        &mut vertices,
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                1 => {}
+                                _ => {}
+                            }
+                            slice_index += 1;
+                        }
+                    }
+                }
+            }
+            // https://gist.github.com/Vercidium/a3002bd083cce2bc854c9ff8f0118d33
+            "greedy2" => {
+                let mut mask = vec![false; CHUNK_SIZE_X * CHUNK_SIZE_Y];
+                let mut flip = vec![false; CHUNK_SIZE_X * CHUNK_SIZE_Y];
+
+                for d in 0..3 {
+                    let u = (d + 1) % 3;
+                    let v = (d + 2) % 3;
+
+                    let mut x = [0; 3];
+                    let mut q = [0; 3];
+                    q[d] = 1;
+
+                    x[d] = -1;
+                    while x[d] < CHUNK_SIZE_X as i32 {
+                        let mut n = 0;
+                        for j in 0..CHUNK_SIZE_Y {
+                            x[v] = j as i32;
+                            for i in 0..CHUNK_SIZE_X {
+                                x[u] = i as i32;
+
+                                let block_current = if x[d] >= 0
+                                    && (x[0] as usize) < CHUNK_SIZE_X
+                                    && (x[1] as usize) < CHUNK_SIZE_Y
+                                    && (x[2] as usize) < CHUNK_SIZE_Z
+                                {
+                                    self.get_block(x[0] as usize, x[1] as usize, x[2] as usize)
+                                        != Block::Air
+                                } else {
+                                    true
+                                };
+
+                                let block_compare = if x[d] < CHUNK_SIZE_X as i32 - 1
+                                    && ((x[0] + q[0]) as usize) < CHUNK_SIZE_X
+                                    && ((x[1] + q[1]) as usize) < CHUNK_SIZE_Y
+                                    && ((x[2] + q[2]) as usize) < CHUNK_SIZE_Z
+                                {
+                                    self.get_block(
+                                        (x[0] + q[0]) as usize,
+                                        (x[1] + q[1]) as usize,
+                                        (x[2] + q[2]) as usize,
+                                    ) != Block::Air
+                                } else {
+                                    true
+                                };
+
+                                mask[n] = block_current != block_compare;
+                                flip[n] = block_compare;
+                                n += 1;
+                            }
+                        }
+
+                        x[d] += 1;
+                        n = 0;
+
+                        for j in 0..CHUNK_SIZE_Y {
+                            let mut i = 0;
+                            while i < CHUNK_SIZE_X {
+                                if mask[n] {
+                                    let mut w = 1;
+                                    while i + w < CHUNK_SIZE_X
+                                        && mask[n + w]
+                                        && flip[n] == flip[n + w]
+                                    {
+                                        w += 1;
+                                    }
+
+                                    let mut h = 1;
+                                    let mut done = false;
+                                    while j + h < CHUNK_SIZE_Y && !done {
+                                        for k in 0..w {
+                                            let index = n + k + h * CHUNK_SIZE_X;
+                                            if index >= mask.len()
+                                                || !mask[index]
+                                                || flip[n] != flip[index]
+                                            {
+                                                done = true;
+                                                break;
+                                            }
+                                        }
+                                        if !done {
+                                            h += 1;
+                                        }
+                                    }
+
+                                    x[u] = i as i32;
+                                    x[v] = j as i32;
+
+                                    let mut du = [0; 3];
+                                    let mut dv = [0; 3];
+                                    du[u] = w as i32;
+                                    dv[v] = h as i32;
+
+                                    let block =
+                                        self.get_block(x[0] as usize, x[1] as usize, x[2] as usize);
+                                    if let Some(atlas_coords) = block.get_atlas_coords() {
+                                        let atlas_coords = atlas_coords.get(d).unwrap();
+                                        let position = [x[0] as f32, x[1] as f32, x[2] as f32];
+
+                                        let starting_length = vertices.len();
+
+                                        if !flip[n] {
+                                            vertices.append(&mut add_position_to_vertices(
+                                                &[
+                                                    ModelVertex {
+                                                        position: [
+                                                            x[0] as f32,
+                                                            x[1] as f32,
+                                                            x[2] as f32,
+                                                        ],
+                                                        tex_coords: BOTTOM_LEFT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                    ModelVertex {
+                                                        position: [
+                                                            (x[0] + du[0]) as f32,
+                                                            (x[1] + du[1]) as f32,
+                                                            (x[2] + du[2]) as f32,
+                                                        ],
+                                                        tex_coords: BOTTOM_RIGHT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                    ModelVertex {
+                                                        position: [
+                                                            (x[0] + dv[0]) as f32,
+                                                            (x[1] + dv[1]) as f32,
+                                                            (x[2] + dv[2]) as f32,
+                                                        ],
+                                                        tex_coords: TOP_LEFT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                    ModelVertex {
+                                                        position: [
+                                                            (x[0] + du[0] + dv[0]) as f32,
+                                                            (x[1] + du[1] + dv[1]) as f32,
+                                                            (x[2] + du[2] + dv[2]) as f32,
+                                                        ],
+                                                        tex_coords: TOP_RIGHT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                ],
+                                                position.into(),
+                                                (*atlas_coords).into(),
+                                            ));
+                                        } else {
+                                            vertices.append(&mut add_position_to_vertices(
+                                                &[
+                                                    ModelVertex {
+                                                        position: [
+                                                            x[0] as f32,
+                                                            x[1] as f32,
+                                                            x[2] as f32,
+                                                        ],
+                                                        tex_coords: BOTTOM_LEFT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                    ModelVertex {
+                                                        position: [
+                                                            (x[0] + dv[0]) as f32,
+                                                            (x[1] + dv[1]) as f32,
+                                                            (x[2] + dv[2]) as f32,
+                                                        ],
+                                                        tex_coords: TOP_LEFT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                    ModelVertex {
+                                                        position: [
+                                                            (x[0] + du[0] + dv[0]) as f32,
+                                                            (x[1] + du[1] + dv[1]) as f32,
+                                                            (x[2] + du[2] + dv[2]) as f32,
+                                                        ],
+                                                        tex_coords: TOP_RIGHT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                    ModelVertex {
+                                                        position: [
+                                                            (x[0] + du[0]) as f32,
+                                                            (x[1] + du[1]) as f32,
+                                                            (x[2] + du[2]) as f32,
+                                                        ],
+                                                        tex_coords: BOTTOM_RIGHT,
+                                                        atlas_coords: *atlas_coords,
+                                                    },
+                                                ],
+                                                position.into(),
+                                                (*atlas_coords).into(),
+                                            ));
+                                        }
+
+                                        add_indices(
+                                            [0, 2, 1, 1, 2, 3],
+                                            starting_length,
+                                            &mut indices,
+                                        );
+                                    }
+
+                                    for l in 0..h {
+                                        for k in 0..w {
+                                            mask[n + k + l * CHUNK_SIZE_X] = false;
+                                        }
+                                    }
+
+                                    i += w;
+                                    n += w;
+                                } else {
+                                    i += 1;
+                                    n += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             "greedy" => {
                 // the problem is that we don't recheck the ranges while growing, so
                 // they could maybe grow into the other ranges
@@ -762,7 +1366,7 @@ fn position_to_chunk_position(p: Point3<f32>) -> Point2<i32> {
     .into()
 }
 
-pub const MESHING_ALGORITHMS: [&str; 2] = ["naive", "greedy"];
+pub const MESHING_ALGORITHMS: [&str; 5] = ["naive", "greedy", "greedy2", "greedy3", "greedy4"];
 
 impl World {
     pub fn new(seed: u32) -> Self {
@@ -778,7 +1382,7 @@ impl World {
             position: (0.0, 0.0, 0.0).into(),
             chunks_to_generate: VecDeque::new(),
             world_stats: WorldStats::default(),
-            meshing_algorithm: 0,
+            meshing_algorithm: 3,
             last_meshing_algorithm: 0,
         }
     }

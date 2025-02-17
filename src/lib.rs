@@ -729,6 +729,7 @@ impl State {
                             // - interactable meshing algorithm selector
                             let prints = stats! {
                                 "FPS" => ui.io().framerate,
+                                "Position" => self.camera.display_position(),
                                 "Chunks loaded" => self.world.chunks.len(),
                                 "Last mesh time" => self.world.world_stats.mesh_gen_times.last().unwrap_or(&0.0),
                                 "Average mesh time (last 20)" => self.world.world_stats.get_mesh_gen_time_avg(),                                

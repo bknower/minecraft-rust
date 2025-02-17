@@ -1,13 +1,13 @@
-use cgmath::Vector2;
-
 use crate::{
     model::{Material, Mesh},
     resources::load_texture,
 };
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+use cgmath::Vector2;
+use strum_macros::EnumIter;
+#[derive(Copy, Clone, PartialEq, Eq, Hash, EnumIter, Default)]
 
 pub enum Block {
+    #[default]
     Air,
     Grass,
     Stone,

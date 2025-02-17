@@ -1,5 +1,6 @@
 use cgmath::*;
 use std::f32::consts::FRAC_PI_2;
+use std::fmt::Display;
 use std::time::Duration;
 use winit::dpi::PhysicalPosition;
 use winit::event::*;
@@ -23,6 +24,9 @@ pub struct Camera {
 }
 
 impl Camera {
+    pub fn display_position(&self) -> String {
+        format! {"{:?}", self.position}
+    }
     pub fn new<V: Into<Point3<f32>>, Y: Into<Rad<f32>>, P: Into<Rad<f32>>>(
         position: V,
         yaw: Y,
