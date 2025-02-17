@@ -66,181 +66,200 @@ impl Side {
     }
 }
 
-const V0: [f32; 3] = [0.0, 0.0, 0.0];
-const V1: [f32; 3] = [0.0, 0.0, 1.0];
-const V2: [f32; 3] = [0.0, 1.0, 0.0];
-const V3: [f32; 3] = [0.0, 1.0, 1.0];
-const V4: [f32; 3] = [1.0, 0.0, 0.0];
-const V5: [f32; 3] = [1.0, 0.0, 1.0];
-const V6: [f32; 3] = [1.0, 1.0, 0.0];
-const V7: [f32; 3] = [1.0, 1.0, 1.0];
+// Corner naming convention: V0..V7
+// Each is [x, y, z], from (0,0,0) up to (1,1,1).
+// 8 corners of a unit cube in [0,1]^3.
+const V0: [f32; 3] = [0.0, 0.0, 0.0]; // (x=0, y=0, z=0)
+const V1: [f32; 3] = [0.0, 1.0, 0.0]; // (x=0, y=1, z=0)
+const V2: [f32; 3] = [0.0, 0.0, 1.0]; // (x=0, y=0, z=1)
+const V3: [f32; 3] = [0.0, 1.0, 1.0]; // (x=0, y=1, z=1)
+const V4: [f32; 3] = [1.0, 0.0, 0.0]; // (x=1, y=0, z=0)
+const V5: [f32; 3] = [1.0, 1.0, 0.0]; // (x=1, y=1, z=0)
+const V6: [f32; 3] = [1.0, 0.0, 1.0]; // (x=1, y=0, z=1)
+const V7: [f32; 3] = [1.0, 1.0, 1.0]; // (x=1, y=1, z=1)
 
 const BOTTOM_LEFT: [f32; 2] = [0.0, 0.0];
 const TOP_LEFT: [f32; 2] = [0.0, 1.0];
 const BOTTOM_RIGHT: [f32; 2] = [1.0, 0.0];
 const TOP_RIGHT: [f32; 2] = [1.0, 1.0];
 
+/// Plane x=0, facing -X.
+/// CCW from the outside perspective looking from x < 0 back toward x=0.
 const LEFT_VERTICES: [ModelVertex; 4] = [
+    // We'll pick V1 -> V0 -> V2 -> V3 in that sequence:
+    //  V1 (0,1,0), V0 (0,0,0), V2 (0,0,1), V3 (0,1,1)
+    ModelVertex {
+        position: V1,
+        tex_coords: [0.0, 0.0],
+        atlas_coords: [0.0, 0.0],
+    },
     ModelVertex {
         position: V0,
-        tex_coords: BOTTOM_RIGHT,
+        tex_coords: [1.0, 0.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V2,
-        tex_coords: TOP_RIGHT,
+        tex_coords: [1.0, 1.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
-        position: V4,
-        tex_coords: BOTTOM_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V6,
-        tex_coords: TOP_LEFT,
+        position: V3,
+        tex_coords: [0.0, 1.0],
         atlas_coords: [0.0, 0.0],
     },
 ];
 
+/// Plane x=1, facing +X, spanned by (y,z).
+/// This one was already correct in your code, but here it is for completeness:
 const RIGHT_VERTICES: [ModelVertex; 4] = [
+    // V4 (1,0,0), V5 (1,1,0), V7 (1,1,1), V6 (1,0,1)
     ModelVertex {
-        position: V1,
-        tex_coords: BOTTOM_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V3,
-        tex_coords: TOP_LEFT,
+        position: V4,
+        tex_coords: [0.0, 0.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V5,
-        tex_coords: BOTTOM_RIGHT,
+        tex_coords: [1.0, 0.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
-        tex_coords: TOP_RIGHT,
-        atlas_coords: [0.0, 0.0],
-    },
-];
-
-const DOWN_VERTICES: [ModelVertex; 4] = [
-    ModelVertex {
-        position: V0,
-        tex_coords: TOP_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V1,
-        tex_coords: TOP_RIGHT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V4,
-        tex_coords: BOTTOM_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V5,
-        tex_coords: BOTTOM_RIGHT,
-        atlas_coords: [0.0, 0.0],
-    },
-];
-
-const UP_VERTICES: [ModelVertex; 4] = [
-    ModelVertex {
-        position: V2,
-        tex_coords: BOTTOM_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V3,
-        tex_coords: TOP_LEFT,
+        tex_coords: [1.0, 1.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V6,
-        tex_coords: BOTTOM_RIGHT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V7,
-        tex_coords: TOP_RIGHT,
+        tex_coords: [0.0, 1.0],
         atlas_coords: [0.0, 0.0],
     },
 ];
 
+/// Plane y=0, facing -Y, spanned by (x,z).
+const DOWN_VERTICES: [ModelVertex; 4] = [
+    // V0(0,0,0), V4(1,0,0), V6(1,0,1), V2(0,0,1)
+    ModelVertex {
+        position: V0,
+        tex_coords: [0.0, 0.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V4,
+        tex_coords: [1.0, 0.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: [1.0, 1.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V2,
+        tex_coords: [0.0, 1.0],
+        atlas_coords: [0.0, 0.0],
+    },
+];
+
+/// Plane y=1, facing +Y, spanned by (x,z).
+const UP_VERTICES: [ModelVertex; 4] = [
+    // V1(0,1,0), V3(0,1,1), V7(1,1,1), V5(1,1,0)
+    ModelVertex {
+        position: V1,
+        tex_coords: [0.0, 0.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V3,
+        tex_coords: [0.0, 1.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V7,
+        tex_coords: [1.0, 1.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V5,
+        tex_coords: [1.0, 0.0],
+        atlas_coords: [0.0, 0.0],
+    },
+];
+/// Plane z=0, facing -Z, spanned by (x,y).
+/// One valid CCW order: V1 -> V5 -> V4 -> V0
 const BACK_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
-        position: V4,
-        tex_coords: BOTTOM_RIGHT,
+        position: V1,
+        tex_coords: [0.0, 0.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V5,
-        tex_coords: BOTTOM_LEFT,
+        tex_coords: [1.0, 0.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V4,
+        tex_coords: [1.0, 1.0],
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V0,
+        tex_coords: [0.0, 1.0],
+        atlas_coords: [0.0, 0.0],
+    },
+];
+/// Plane z=1, facing +Z, spanned by (x,y).
+const FRONT_VERTICES: [ModelVertex; 4] = [
+    // V2(0,0,1), V6(1,0,1), V7(1,1,1), V3(0,1,1)
+    ModelVertex {
+        position: V2,
+        tex_coords: [0.0, 0.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V6,
-        tex_coords: TOP_RIGHT,
+        tex_coords: [1.0, 0.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
-        tex_coords: TOP_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-];
-
-const FRONT_VERTICES: [ModelVertex; 4] = [
-    ModelVertex {
-        position: V0,
-        tex_coords: BOTTOM_LEFT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V1,
-        tex_coords: BOTTOM_RIGHT,
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V2,
-        tex_coords: TOP_LEFT,
+        tex_coords: [1.0, 1.0],
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
-        tex_coords: TOP_RIGHT,
+        tex_coords: [0.0, 1.0],
         atlas_coords: [0.0, 0.0],
     },
 ];
 
-const LEFT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-const RIGHT_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
-const DOWN_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
-const UP_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-const FRONT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
+// Triangle indices for a quad in the order [0,1,2, 2,3,0]
+const FACE_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
+// const LEFT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+// const RIGHT_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
+// const DOWN_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
+// const UP_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+// const FRONT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
+// const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
 
 const QUAD_VERTICES: [&[ModelVertex; 4]; 6] = [
-    &LEFT_VERTICES,  // 0: -X (left)
-    &RIGHT_VERTICES, // 1: +X (right)
-    &DOWN_VERTICES,  // 2: -Y (down)
-    &UP_VERTICES,    // 3: +Y (up)
-    &FRONT_VERTICES, // 4: -Z (front)
-    &BACK_VERTICES,  // 5: +Z (back)
+    &LEFT_VERTICES,  // i=0
+    &RIGHT_VERTICES, // i=1
+    &DOWN_VERTICES,  // i=2
+    &UP_VERTICES,    // i=3
+    &FRONT_VERTICES, // i=4
+    &BACK_VERTICES,  // i=5
 ];
 
 const QUAD_INDICES: [&[u32; 6]; 6] = [
-    &LEFT_INDICES,  // 0: -X (left)
-    &RIGHT_INDICES, // 1: +X (right)
-    &DOWN_INDICES,  // 2: -Y (down)
-    &UP_INDICES,    // 3: +Y (up)
-    &FRONT_INDICES, // 4: -Z (front)
-    &BACK_INDICES,  // 5: +Z (back)
+    &FACE_INDICES, // 0: -X (left)
+    &FACE_INDICES, // 1: +X (right)
+    &FACE_INDICES, // 2: -Y (down)
+    &FACE_INDICES, // 3: +Y (up)
+    &FACE_INDICES, // 4: -Z (front)
+    &FACE_INDICES, // 5: +Z (back)
 ];
 
 /// Adds a face (4 vertices) as two triangles to the provided buffers.
@@ -358,69 +377,48 @@ impl Chunk {
         meshing_algorithm: usize, // layout: &wgpu::BindGroupLayout,
     ) -> Mesh {
         let blocks = self.blocks;
-
         fn add_position_and_scale_to_vertices(
             verts: [ModelVertex; 4],
             start_coords: [f32; 3],
             scale: [f32; 3],
-            material_atlas_coords: [f32; 2],
+            atlas_offset: [f32; 2],
             face_index: usize,
         ) -> Vec<ModelVertex> {
             verts
                 .iter()
-                .map(|vertex| {
-                    let ModelVertex {
-                        position,
-                        tex_coords,
-                        atlas_coords, // normal,
-                    } = vertex;
-                    // println!("Original Vertex: {}, {:?}", vertex, scale);
+                .map(|v| {
+                    // Always scale all 3 dimensions for the position
+                    let scaled_pos = [
+                        start_coords[0] + v.position[0] * scale[0],
+                        start_coords[1] + v.position[1] * scale[1],
+                        start_coords[2] + v.position[2] * scale[2],
+                    ];
 
-                    let scaled_position = match face_index {
+                    // For UV tiling, pick which 2 axes are actually varying on this face:
+                    let scaled_uv = match face_index {
+                        // 0 = LEFT, 1 = RIGHT => face is in X=0 or X=1 => vary (y,z)
                         0 | 1 => [
-                            // Left/Right faces - preserve X (normal to face)
-                            start_coords[0] + vertex.position[0], // Keep original X
-                            start_coords[1] + vertex.position[1] * scale[1], // Scale Y
-                            start_coords[2] + vertex.position[2] * scale[2], // Scale Z
+                            v.tex_coords[0] * scale[1], // tile along Y
+                            v.tex_coords[1] * scale[2], // tile along Z
                         ],
+                        // 2 = DOWN, 3 = UP => face is in Y=0 or Y=1 => vary (x,z)
                         2 | 3 => [
-                            // Up/Down faces - preserve Y (normal to face)
-                            start_coords[0] + vertex.position[0] * scale[0], // Scale X
-                            start_coords[1] + vertex.position[1],            // Keep original Y
-                            start_coords[2] + vertex.position[2] * scale[2], // Scale Z
+                            v.tex_coords[0] * scale[0], // tile along X
+                            v.tex_coords[1] * scale[2], // tile along Z
                         ],
+                        // 4 = BACK, 5 = FRONT => face is in Z=0 or Z=1 => vary (x,y)
                         4 | 5 => [
-                            // Front/Back faces - preserve Z (normal to face)
-                            start_coords[0] + vertex.position[0] * scale[0], // Scale X
-                            start_coords[1] + vertex.position[1] * scale[1], // Scale Y
-                            start_coords[2] + vertex.position[2],            // Keep original Z
-                        ],
-                        _ => unreachable!(),
-                    };
-                    // Handle texture coordinates scaling
-                    let new_tex_coords = match face_index {
-                        0 | 1 => [
-                            vertex.tex_coords[0] * scale[1], // Scale by Y
-                            vertex.tex_coords[1] * scale[2], // Scale by Z
-                        ],
-                        2 | 3 => [
-                            vertex.tex_coords[0] * scale[0], // Scale by X
-                            vertex.tex_coords[1] * scale[2], // Scale by Z
-                        ],
-                        4 | 5 => [
-                            vertex.tex_coords[0] * scale[0], // Scale by X
-                            vertex.tex_coords[1] * scale[1], // Scale by Y
+                            v.tex_coords[0] * scale[0], // tile along X
+                            v.tex_coords[1] * scale[1], // tile along Y
                         ],
                         _ => unreachable!(),
                     };
 
-                    let new_vertex = ModelVertex {
-                        position: scaled_position,
-                        tex_coords: new_tex_coords,
-                        atlas_coords: material_atlas_coords,
-                    };
-                    // println!("{}, {:?},", new_vertex, scale);
-                    new_vertex
+                    ModelVertex {
+                        position: scaled_pos,
+                        tex_coords: scaled_uv,
+                        atlas_coords: atlas_offset,
+                    }
                 })
                 .collect()
         }
@@ -441,16 +439,6 @@ impl Chunk {
             indices: &mut Vec<u32>,
             vertices: &mut Vec<ModelVertex>,
         ) {
-            // println!(
-            //     "adding combined mesh from {:?} to {:?} with scale: {:?}",
-            //     start_coords,
-            //     (
-            //         start_coords.0 + scale.0,
-            //         start_coords.1 + scale.1,
-            //         start_coords.2 + scale.2
-            //     ),
-            //     scale
-            // );
             let atlas_coords = block.get_atlas_coords();
             let (start_x, start_y, start_z) = start_coords;
             let (scale_x, scale_y, scale_z) = scale;
@@ -459,31 +447,18 @@ impl Chunk {
                 let position = [start_x as f32, start_y as f32, start_z as f32];
                 let texture_length = atlas_coords.len();
                 let face_tuples = [
-                    (LEFT_VERTICES, LEFT_INDICES),
-                    (RIGHT_VERTICES, RIGHT_INDICES),
-                    (DOWN_VERTICES, DOWN_INDICES),
-                    (UP_VERTICES, UP_INDICES),
-                    (FRONT_VERTICES, FRONT_INDICES),
-                    (BACK_VERTICES, BACK_INDICES),
+                    (LEFT_VERTICES, FACE_INDICES),
+                    (RIGHT_VERTICES, FACE_INDICES),
+                    (DOWN_VERTICES, FACE_INDICES),
+                    (UP_VERTICES, FACE_INDICES),
+                    (FRONT_VERTICES, FACE_INDICES),
+                    (BACK_VERTICES, FACE_INDICES),
                 ];
 
                 for (i, (direction_vertices, direction_indices)) in
                     face_tuples.into_iter().enumerate()
                 {
                     let atlas_coords = atlas_coords.get(i).unwrap();
-                    // let new_scale = match i {
-                    //     0 | 1 => [scale_x as f32, scale_y as f32, 0.0],
-                    //     2 | 3 => [0.0, scale_y as f32, scale_z as f32],
-                    //     4 | 5 => [scale_x as f32, 0.0, scale_z as f32],
-                    //     _ => unreachable!(),
-                    // };
-                    // let index_of_0 = match i {
-                    //     0 | 1 => 2,
-                    //     2 | 3 => 0,
-                    //     4 | 5 => 1,
-                    //     _ => unreachable!(),
-                    // };
-                    // println!("{}", i);
 
                     let starting_length = vertices.len();
                     vertices.append(&mut add_position_and_scale_to_vertices(
@@ -520,12 +495,12 @@ impl Chunk {
 
             // All possible face definitions (vertices and indices):
             let face_tuples = [
-                (LEFT_VERTICES, LEFT_INDICES),
-                (RIGHT_VERTICES, RIGHT_INDICES),
-                (DOWN_VERTICES, DOWN_INDICES),
-                (UP_VERTICES, UP_INDICES),
-                (FRONT_VERTICES, FRONT_INDICES),
-                (BACK_VERTICES, BACK_INDICES),
+                (LEFT_VERTICES, FACE_INDICES),
+                (RIGHT_VERTICES, FACE_INDICES),
+                (DOWN_VERTICES, FACE_INDICES),
+                (UP_VERTICES, FACE_INDICES),
+                (FRONT_VERTICES, FACE_INDICES),
+                (BACK_VERTICES, FACE_INDICES),
             ];
 
             // Determine which face we are adding
@@ -1053,7 +1028,27 @@ impl Chunk {
                     })
                     .collect();
 
-                let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
+                // let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
+
+                let mut masks: HashMap<Block, [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z]> =
+                    Default::default();
+                for block_type in Block::iter() {
+                    masks.insert(
+                        block_type,
+                        [false; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z],
+                    );
+                }
+                for (i, block) in self.blocks.iter().enumerate() {
+                    masks.get_mut(block).unwrap()[i] = true;
+                }
+
+                let mask: &mut [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z] =
+                    masks.get_mut(&Block::Stone).unwrap();
+                // printy!(mask);
+                // printy!(mask
+                //     .iter()
+                //     .fold(0, |initial, val| initial + if *val { 1 } else { 1 }));
+                // assert!(false);
 
                 for coords in coord_vec {
                     use Block::*;
@@ -1061,177 +1056,121 @@ impl Chunk {
                     let (mut end_x, mut end_y, mut end_z) =
                         (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
 
-                    let mut block_in_range = |x: usize, y: usize, z: usize| {
-                        ranges.iter().any(|range| {
-                            let &(
-                                range_x_start,
-                                range_y_start,
-                                range_z_start,
-                                range_x_size,
-                                range_y_size,
-                                range_z_size,
-                            ) = range;
-
-                            let (range_x_end, range_y_end, range_z_end) = (
-                                range_x_start + range_x_size,
-                                range_y_start + range_y_size,
-                                range_z_start + range_z_size,
-                            );
-                            let (after_start_x, after_start_y, after_start_z) = (
-                                start_x >= range_x_start,
-                                start_y >= range_y_start,
-                                start_z >= range_z_start,
-                            );
-                            after_start_x
-                                && start_x < range_x_end
-                                && after_start_y
-                                && start_y < range_y_end
-                                && after_start_z
-                                && start_z < range_z_end
-                        })
-                    };
-
                     // if this block is not in any of the existing ranges
-                    if !ranges.iter().any(|range| {
-                        let &(
-                            range_x_start,
-                            range_y_start,
-                            range_z_start,
-                            range_x_size,
-                            range_y_size,
-                            range_z_size,
-                        ) = range;
-
-                        let (range_x_end, range_y_end, range_z_end) = (
-                            range_x_start + range_x_size,
-                            range_y_start + range_y_size,
-                            range_z_start + range_z_size,
-                        );
-                        let (after_start_x, after_start_y, after_start_z) = (
-                            start_x >= range_x_start,
-                            start_y >= range_y_start,
-                            start_z >= range_z_start,
-                        );
-                        if !after_start_x {
-                            end_x = range_x_start;
-                        }
-                        if !after_start_y {
-                            end_y = range_y_start;
-                        }
-                        if !after_start_z {
-                            end_z = range_z_start;
-                        }
-                        after_start_x
-                            && start_x < range_x_end
-                            && after_start_y
-                            && start_y < range_y_end
-                            && after_start_z
-                            && start_z < range_z_end
-                    }) {
+                    // printy!(coords, Chunk::get_3d(mask, start_x, start_y, start_z));
+                    if Chunk::get_3d(mask, start_x, start_y, start_z) {
                         // let start_block = blocks[start_x][start_y][start_z];
-                        let start_block = self.get_block(start_x, start_y, start_z);
-                        if start_block != Air {
-                            for x in (start_x + 1)..end_x {
-                                // let curr_block = blocks[x][start_y][start_z];
-                                let curr_block = self.get_block(x, start_y, start_z);
-                                if start_block != curr_block {
-                                    end_x = x;
-                                    break;
+                        for x in (start_x + 1)..end_x {
+                            // let curr_block = blocks[x][start_y][start_z];
+                            // let curr_block = self.get_block(x, start_y, start_z);
+                            if !Chunk::get_3d(mask, x, start_y, start_z) {
+                                end_x = x;
+                                break;
+                            }
+                        }
+
+                        'outer: for z in (start_z + 1)..end_z {
+                            for x in start_x..end_x {
+                                // let curr_block = blocks[x][start_y][z];
+                                // let curr_block = self.get_block(x, start_y, z);
+                                if !Chunk::get_3d(mask, x, start_y, z) {
+                                    end_z = z;
+                                    break 'outer;
                                 }
                             }
+                        }
 
-                            'outer: for z in (start_z + 1)..end_z {
-                                for x in start_x..end_x {
-                                    // let curr_block = blocks[x][start_y][z];
-                                    let curr_block = self.get_block(x, start_y, z);
-                                    if start_block != curr_block {
-                                        end_z = z;
+                        'outer: for y in (start_y + 1)..end_y {
+                            for x in start_x..end_x {
+                                for z in start_z..end_z {
+                                    // let curr_block = blocks[x][y][z];
+                                    // let curr_block = self.get_block(x, y, z);
+                                    if !Chunk::get_3d(mask, x, y, z) {
+                                        end_y = y;
                                         break 'outer;
                                     }
                                 }
                             }
+                        }
 
-                            'outer: for y in (start_y + 1)..end_y {
-                                for x in start_x..end_x {
-                                    for z in start_z..end_z {
-                                        // let curr_block = blocks[x][y][z];
-                                        let curr_block = self.get_block(x, y, z);
-                                        if start_block != curr_block {
-                                            end_y = y;
-                                            break 'outer;
-                                        }
-                                    }
+                        let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
+                        // printy!(coords, scale);
+                        // add adjusted mesh
+                        add_combined_mesh(Block::Stone, coords, scale, &mut indices, &mut vertices);
+                        for x in start_x..end_x {
+                            for y in start_y..end_y {
+                                for z in start_z..end_z {
+                                    Chunk::set_3d(&mut *mask, x, y, z, false);
+                                    // printy!("set", Chunk::get_3d(mask, x, y, z));
                                 }
                             }
-
-                            let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
-                            // add adjusted mesh
-                            add_combined_mesh(
-                                start_block,
-                                coords,
-                                scale,
-                                &mut indices,
-                                &mut vertices,
-                            );
-                            ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                         }
+                        // ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                     }
                 }
             }
             "naive" => {
-                // naive meshing
                 for x in 0..CHUNK_SIZE_X {
                     for y in 0..CHUNK_SIZE_Y {
                         for z in 0..CHUNK_SIZE_Z {
                             let block = self.get_block(x, y, z);
-                            use Block::*;
-                            let front = x == 0 || self.get_block(x - 1, y, z) == Air;
-                            let back = x == CHUNK_SIZE_X - 1 || self.get_block(x + 1, y, z) == Air;
-                            let down = y == 0 || self.get_block(x, y - 1, z) == Air;
-                            let up = y == CHUNK_SIZE_Y - 1 || self.get_block(x, y + 1, z) == Air;
-                            let left = z == 0 || self.get_block(x, y, z - 1) == Air;
-                            let right = z == CHUNK_SIZE_Z - 1 || self.get_block(x, y, z + 1) == Air;
-                            // let (front, back, down, up, left, right) = (true, true, true, true, true, true);
-                            let atlas_coords = block.get_atlas_coords();
+                            if let Some(atlas_coords) = block.get_atlas_coords() {
+                                // Determine if each face is visible
+                                // (i.e. there’s air or an edge on that side).
+                                let is_left_face_visible =
+                                    (x == 0) || self.get_block(x - 1, y, z) == Block::Air;
+                                let is_right_face_visible = (x == CHUNK_SIZE_X - 1)
+                                    || self.get_block(x + 1, y, z) == Block::Air;
 
-                            if let Some(atlas_coords) = atlas_coords {
-                                // let chunk_position =
-                                // Vector3::new(self.chunk_x as f32, 0.0, self.chunk_z as f32);
+                                let is_back_face_visible =
+                                    (z == 0) || self.get_block(x, y, z - 1) == Block::Air;
+                                let is_front_face_visible = (z == CHUNK_SIZE_Z - 1)
+                                    || self.get_block(x, y, z + 1) == Block::Air;
+
+                                let is_down_face_visible =
+                                    (y == 0) || self.get_block(x, y - 1, z) == Block::Air;
+                                let is_up_face_visible = (y == CHUNK_SIZE_Y - 1)
+                                    || self.get_block(x, y + 1, z) == Block::Air;
+
                                 let position = [x as f32, y as f32, z as f32];
-                                let texture_length = atlas_coords.len();
+
+                                // Pair each “visibility flag” with the correct face array.
+                                // The enumerations match the indexing inside atlas_coords.
                                 let face_tuples = [
-                                    (left, LEFT_VERTICES, LEFT_INDICES),
-                                    (right, RIGHT_VERTICES, RIGHT_INDICES),
-                                    (down, DOWN_VERTICES, DOWN_INDICES),
-                                    (up, UP_VERTICES, UP_INDICES),
-                                    (front, FRONT_VERTICES, FRONT_INDICES),
-                                    (back, BACK_VERTICES, BACK_INDICES),
+                                    (is_left_face_visible, &LEFT_VERTICES, &FACE_INDICES),
+                                    (is_right_face_visible, &RIGHT_VERTICES, &FACE_INDICES),
+                                    (is_down_face_visible, &DOWN_VERTICES, &FACE_INDICES),
+                                    (is_up_face_visible, &UP_VERTICES, &FACE_INDICES),
+                                    (is_back_face_visible, &BACK_VERTICES, &FACE_INDICES),
+                                    (is_front_face_visible, &FRONT_VERTICES, &FACE_INDICES),
                                 ];
 
-                                for (i, (direction, direction_vertices, direction_indices)) in
-                                    face_tuples.into_iter().enumerate()
+                                // Now add whichever faces are visible.
+                                for (i, (face_visible, direction_vertices, direction_indices)) in
+                                    face_tuples.iter().enumerate()
                                 {
-                                    // let face_tuple = face_tuples.get(i).unwrap();
-                                    // let (direction, direction_vertices, direction_indices) = face_tuple;
-                                    // let atlas_coords = if texture_length == 1 {
-                                    //     atlas_coords.first().unwrap()
-                                    // } else {
-                                    //     atlas_coords.get(i).unwrap()
-                                    // };
-                                    let atlas_coords = atlas_coords.get(i).unwrap();
-                                    // println!("{:?}", atlas_coords);
-                                    if direction {
-                                        let starting_length = vertices.len();
-                                        vertices.append(&mut add_position_to_vertices(
-                                            &direction_vertices,
-                                            position.into(),
-                                            (*atlas_coords).into(),
-                                        ));
-                                        add_indices(
-                                            direction_indices,
-                                            starting_length,
-                                            &mut indices,
-                                        );
+                                    if *face_visible {
+                                        // Grab the correct sub‐tile offset from atlas_coords[i]
+                                        let uv_offset = atlas_coords[i];
+
+                                        let start_len = vertices.len() as u32;
+                                        // Add the 4 face‐corner vertices
+                                        for &base_v in direction_vertices.iter() {
+                                            let mut v = base_v;
+                                            // Move the face to (x,y,z)
+                                            v.position = [
+                                                position[0] + v.position[0],
+                                                position[1] + v.position[1],
+                                                position[2] + v.position[2],
+                                            ];
+                                            // Set the block’s atlas offset
+                                            v.atlas_coords = uv_offset;
+                                            vertices.push(v);
+                                        }
+                                        // Add the face’s 6 indices
+                                        for &idx in (*direction_indices).iter() {
+                                            indices.push(start_len + idx);
+                                        }
                                     }
                                 }
                             }
@@ -1239,6 +1178,7 @@ impl Chunk {
                     }
                 }
             }
+
             _ => unreachable!(),
         }
 
@@ -1382,7 +1322,7 @@ impl World {
             position: (0.0, 0.0, 0.0).into(),
             chunks_to_generate: VecDeque::new(),
             world_stats: WorldStats::default(),
-            meshing_algorithm: 3,
+            meshing_algorithm: 1,
             last_meshing_algorithm: 0,
         }
     }
