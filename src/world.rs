@@ -1021,91 +1021,95 @@ impl Chunk {
                 // the problem is that we don't recheck the ranges while growing, so
                 // they could maybe grow into the other ranges
 
-                let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
-                    .flat_map(|x| {
-                        (0..CHUNK_SIZE_Y)
-                            .flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
-                    })
-                    .collect();
-
-                // let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
-
-                let mut masks: HashMap<Block, [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z]> =
-                    Default::default();
+                // let coord_vec: Vec<(usize, usize, usize)> = (0..CHUNK_SIZE_X)
+                //     .flat_map(|x| {
+                //         (0..CHUNK_SIZE_Y)
+                //             .flat_map(move |y| (0..CHUNK_SIZE_Z).map(move |z| (x, y, z)))
+                //     })
+                //     .collect();
+                let mut masks: Vec<(Block, [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z])> =
+                    vec![];
                 for block_type in Block::iter() {
-                    masks.insert(
+                    masks.push((
                         block_type,
                         [false; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z],
-                    );
+                    ));
                 }
                 for (i, block) in self.blocks.iter().enumerate() {
-                    masks.get_mut(block).unwrap()[i] = true;
+                    masks.get_mut(*block as usize).unwrap().1[i] = true;
                 }
 
-                let mask: &mut [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z] =
-                    masks.get_mut(&Block::Stone).unwrap();
-                // printy!(mask);
-                // printy!(mask
-                //     .iter()
-                //     .fold(0, |initial, val| initial + if *val { 1 } else { 1 }));
-                // assert!(false);
+                let mut mask: [bool; CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z] =
+                    masks.get_mut(Block::Stone as usize).unwrap().1;
+                for start_x in 0..CHUNK_SIZE_X {
+                    for start_y in 0..CHUNK_SIZE_Y {
+                        for start_z in 0..CHUNK_SIZE_Z {
+                            // let mut ranges: Vec<(usize, usize, usize, usize, usize, usize)> = vec![];
 
-                for coords in coord_vec {
-                    use Block::*;
-                    let (start_x, start_y, start_z) = coords;
-                    let (mut end_x, mut end_y, mut end_z) =
-                        (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
+                            // for coords in coord_vec {
+                            use Block::*;
+                            // let (start_x, start_y, start_z) = coords;
+                            let (mut end_x, mut end_y, mut end_z) =
+                                (CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
 
-                    // if this block is not in any of the existing ranges
-                    // printy!(coords, Chunk::get_3d(mask, start_x, start_y, start_z));
-                    if Chunk::get_3d(mask, start_x, start_y, start_z) {
-                        // let start_block = blocks[start_x][start_y][start_z];
-                        for x in (start_x + 1)..end_x {
-                            // let curr_block = blocks[x][start_y][start_z];
-                            // let curr_block = self.get_block(x, start_y, start_z);
-                            if !Chunk::get_3d(mask, x, start_y, start_z) {
-                                end_x = x;
-                                break;
-                            }
-                        }
-
-                        'outer: for z in (start_z + 1)..end_z {
-                            for x in start_x..end_x {
-                                // let curr_block = blocks[x][start_y][z];
-                                // let curr_block = self.get_block(x, start_y, z);
-                                if !Chunk::get_3d(mask, x, start_y, z) {
-                                    end_z = z;
-                                    break 'outer;
-                                }
-                            }
-                        }
-
-                        'outer: for y in (start_y + 1)..end_y {
-                            for x in start_x..end_x {
-                                for z in start_z..end_z {
-                                    // let curr_block = blocks[x][y][z];
-                                    // let curr_block = self.get_block(x, y, z);
-                                    if !Chunk::get_3d(mask, x, y, z) {
-                                        end_y = y;
-                                        break 'outer;
+                            // if this block is not in any of the existing ranges
+                            // printy!(coords, Chunk::get_3d(mask, start_x, start_y, start_z));
+                            if Chunk::get_3d(&mut mask, start_x, start_y, start_z) {
+                                // let start_block = blocks[start_x][start_y][start_z];
+                                for x in (start_x + 1)..end_x {
+                                    // let curr_block = blocks[x][start_y][start_z];
+                                    // let curr_block = self.get_block(x, start_y, start_z);
+                                    if !Chunk::get_3d(&mut mask, x, start_y, start_z) {
+                                        end_x = x;
+                                        break;
                                     }
                                 }
-                            }
-                        }
 
-                        let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
-                        // printy!(coords, scale);
-                        // add adjusted mesh
-                        add_combined_mesh(Block::Stone, coords, scale, &mut indices, &mut vertices);
-                        for x in start_x..end_x {
-                            for y in start_y..end_y {
-                                for z in start_z..end_z {
-                                    Chunk::set_3d(&mut *mask, x, y, z, false);
-                                    // printy!("set", Chunk::get_3d(mask, x, y, z));
+                                'outer: for z in (start_z + 1)..end_z {
+                                    for x in start_x..end_x {
+                                        // let curr_block = blocks[x][start_y][z];
+                                        // let curr_block = self.get_block(x, start_y, z);
+                                        if !Chunk::get_3d(&mut mask, x, start_y, z) {
+                                            end_z = z;
+                                            break 'outer;
+                                        }
+                                    }
                                 }
+
+                                'outer: for y in (start_y + 1)..end_y {
+                                    for x in start_x..end_x {
+                                        for z in start_z..end_z {
+                                            // let curr_block = blocks[x][y][z];
+                                            // let curr_block = self.get_block(x, y, z);
+                                            if !Chunk::get_3d(&mut mask, x, y, z) {
+                                                end_y = y;
+                                                break 'outer;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                let scale = (end_x - start_x, end_y - start_y, end_z - start_z);
+                                // printy!(coords, scale);
+                                // add adjusted mesh
+                                add_combined_mesh(
+                                    Block::Stone,
+                                    (start_x, start_y, start_z),
+                                    scale,
+                                    &mut indices,
+                                    &mut vertices,
+                                );
+                                for x in start_x..end_x {
+                                    for y in start_y..end_y {
+                                        for z in start_z..end_z {
+                                            Chunk::set_3d(&mut mask, x, y, z, false);
+                                            // printy!("set", Chunk::get_3d(mask, x, y, z));
+                                        }
+                                    }
+                                }
+                                // ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                             }
                         }
-                        // ranges.push((start_x, start_y, start_z, scale.0, scale.1, scale.2));
                     }
                 }
             }
