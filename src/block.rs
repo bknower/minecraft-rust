@@ -11,12 +11,13 @@ pub enum Block {
     Air,
     Grass,
     Stone,
+    Wool,
 }
 
 impl Block {
     pub fn get_atlas_coords(self) -> Option<[[f32; 2]; 6]> {
         match self {
-            Block::Stone => Some([
+            Block::Wool => Some([
                 [22.0, 0.0],
                 [22.0, 1.0],
                 [22.0, 2.0],
@@ -27,52 +28,60 @@ impl Block {
             Block::Grass => Some([
                 [1.0, 10.0],
                 [1.0, 10.0],
+                [8.0, 5.0],
+                [4.0, 10.0],
                 [1.0, 10.0],
                 [1.0, 10.0],
-                [1.0, 10.0],
-                [1.0, 10.0],
+            ]),
+            Block::Stone => Some([
+                [19.0, 6.0],
+                [19.0, 6.0],
+                [19.0, 6.0],
+                [19.0, 6.0],
+                [19.0, 6.0],
+                [19.0, 6.0],
             ]),
             _ => None,
         }
     }
-    pub async fn material(
-        self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        layout: &wgpu::BindGroupLayout,
-    ) -> Option<Material> {
-        let file_name_option = match self {
-            Block::Stone => Some("stone.png"),
-            Block::Grass => Some("grass.png"),
-            Block::Air => None,
-        };
+    // pub async fn material(
+    //     self,
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    //     layout: &wgpu::BindGroupLayout,
+    // ) -> Option<Material> {
+    //     let file_name_option = match self {
+    //         Block::Stone => Some("stone.png"),
+    //         Block::Grass => Some("grass.png"),
+    //         Block::Air => None,
+    //     };
 
-        match file_name_option {
-            Some(file_name) => {
-                let diffuse_texture = load_texture(file_name, device, queue).await.unwrap();
-                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                        },
-                    ],
-                    label: None,
-                });
-                Some(Material {
-                    name: file_name.to_string(),
-                    diffuse_texture,
-                    bind_group,
-                })
-            }
-            None => None,
-        }
-    }
+    //     match file_name_option {
+    //         Some(file_name) => {
+    //             let diffuse_texture = load_texture(file_name, device, queue).await.unwrap();
+    //             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    //                 layout,
+    //                 entries: &[
+    //                     wgpu::BindGroupEntry {
+    //                         binding: 0,
+    //                         resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+    //                     },
+    //                     wgpu::BindGroupEntry {
+    //                         binding: 1,
+    //                         resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+    //                     },
+    //                 ],
+    //                 label: None,
+    //             });
+    //             Some(Material {
+    //                 name: file_name.to_string(),
+    //                 diffuse_texture,
+    //                 bind_group,
+    //             })
+    //         }
+    //         None => None,
+    //     }
+    // }
 }
 
 pub struct Cube {

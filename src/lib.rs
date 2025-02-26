@@ -304,7 +304,7 @@ impl State {
         let camera = camera::Camera::new((0.0, 120.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
-        let camera_controller = camera::CameraController::new(30.0, 0.4);
+        let camera_controller = camera::CameraController::new(100.0, 0.4);
         // in new() after creating `camera`
 
         let mut camera_uniform = CameraUniform::new();
@@ -618,8 +618,7 @@ impl State {
                     meshes.push(mesh);
                 }
             }
-            // let meshes: Vec<Mesh> = self.world.chunks.iter().map(|chunk| chunk.to_mesh(&self.device, &self.queue)).collect();
-            // let mesh_refs: Vec<&Mesh> = meshes.iter().map(|mesh| mesh).collect();
+
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -648,26 +647,6 @@ impl State {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
-            // // render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            // // render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-
-            // use model::DrawModel;
-            // render_pass.draw_model_instanced(
-            //     &self.obj_model,
-            //     0..self.instances.len() as u32,
-            //     &self.camera_bind_group,
-            // );
-            // let meshes: Vec<Option<Mesh>> = self.world.chunks.iter().map(|chunk|  chunk.mesh).collect();
-            // self.world.chunks.iter().for_each(|chunk| {
-            // 	let mesh = chunk.mesh.unwrap();
-
-            // 	// if let Some(mesh) = chunk.mesh {
-            // 		render_pass.draw_mesh(&mesh, &self.atlas, &self.camera_bind_group);
-            // 	// }
-            // });
-            // for mesh in meshes {
-            // 	render_pass.draw_mesh(mesh, &self.atlas, &self.camera_bind_group);
-            // }
             for i in 0..meshes.len() {
                 let mesh = meshes.get(i).unwrap();
                 render_pass.draw_mesh_instanced(
@@ -692,15 +671,11 @@ impl State {
                     .prepare_frame(imgui_context.io_mut(), &self.window)
                     .expect("Failed to prepare frame");
 
-                // imgui.platform.prepare_render(ui, &window);
-                // let draw_data = imgui_context.render();
-
                 let ui = imgui_context.new_frame();
 
                 fn prerender_imgui_element(ui: &Ui, label: &str, width: f32) {
                     ui.text(format!("{}: ", label));
                     ui.same_line();
-                    // ui.push_item_width(width);
 
                     let window_width = ui.window_size()[0];
                     let cursor_y = ui.cursor_pos()[1];
@@ -716,7 +691,7 @@ impl State {
                     T: DataTypeKind, // `imgui-rs` requires Numeric trait (i32, f32, etc.)
                 {
                     prerender_imgui_element(ui, label, width);
-                    ui.slider("##slider", min, max, value);
+                    ui.slider(format!("##{:}", label), min, max, value);
                 }
 
                 {
@@ -726,7 +701,6 @@ impl State {
                         .build(|| {
 
                             // additional print ideas
-                            // - interactable meshing algorithm selector
                             let prints = stats! {
                                 "FPS" => ui.io().framerate,
                                 "Position" => self.camera.display_position(),
@@ -760,6 +734,8 @@ impl State {
                             let width = 150.0;
 
                             render_slider(ui, "Render Distance", &mut self.world.render_distance, 0, 100, width);
+
+                            render_slider(ui, "Speed", &mut self.camera_controller.speed, 0.0, 2000.0, width);
 
                             prerender_imgui_element(ui, "Meshing Algorithm", width);
                             ui.combo_simple_string("##combo", &mut self.world.meshing_algorithm, &MESHING_ALGORITHMS);
@@ -926,20 +902,6 @@ impl ApplicationHandler for App {
     ) {
         let state = self.state.as_mut().unwrap();
         let window = state.window.clone();
-        // {
-        //     let imgui = state.imgui.as_mut().unwrap();
-        //     let mut imgui_context = &mut imgui.context;
-        //     imgui.platform.handle_event(
-        //         imgui_context.io_mut(),
-        //         &window,
-        //         &Event::<WindowEvent>::WindowEvent {
-        //             window_id,
-        //             event,
-        //         }
-        //     );
-
-        // }
-        // return;
 
         let imgui = state.imgui.as_mut().unwrap();
         let mut imgui_context = &mut imgui.context;
@@ -998,105 +960,10 @@ impl ApplicationHandler for App {
                         // All other errors (Outdated, Timeout) should be resolved by the next frame
                         Err(e) => eprintln!("{:?}", e),
                     }
-
-                    // let imgui = state.imgui.as_mut().unwrap();
-                    // let mut imgui_context = &mut imgui.context;
-
-                    // imgui_context.io_mut().update_delta_time(dt);
-                    // state.last_render_time = now;
-
-                    // let frame = match state.surface.get_current_texture() {
-                    //     Ok(frame) => frame,
-                    //     Err(e) => {
-                    //         eprintln!("dropped frame: {e:?}");
-                    //         return;
-                    //     }
-                    // };
-
-                    // imgui
-                    //     .platform
-                    //     .prepare_frame(imgui_context.io_mut(), &window)
-                    //     .expect("Failed to prepare frame");
-
-                    // // imgui.platform.prepare_render(ui, &window);
-                    // // let draw_data = imgui_context.render();
-
-                    // let ui = imgui_context.new_frame();
-
-                    // {
-                    //     let window = ui.window("Hello World");
-                    //     window
-                    //         .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                    //         .build(|| {
-                    //             ui.text("Hello world!");
-                    //             ui.text("This...is...imgui-rs on WGPU!");
-                    //             ui.separator();
-                    //             let mouse_pos = ui.io().mouse_pos;
-                    //             ui.text(format!(
-                    //                 "Mouse Position: ({:.1},{:.1})",
-                    //                 mouse_pos[0], mouse_pos[1]
-                    //             ));
-                    //         });
-
-                    //     let window = ui.window("Hello too");
-                    //     window
-                    //         .size([400.0, 200.0], Condition::FirstUseEver)
-                    //         .position([400.0, 200.0], Condition::FirstUseEver)
-                    //         .build(|| {
-                    //             ui.text(format!("Frametime: {delta_s:?}"));
-                    //         });
-
-                    //     ui.show_demo_window(&mut imgui.demo_open);
-                    // }
-
-                    // let mut encoder: wgpu::CommandEncoder = state
-                    //     .device
-                    //     .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-                    // if imgui.last_cursor != ui.mouse_cursor() {
-                    //     imgui.last_cursor = ui.mouse_cursor();
-                    //     imgui.platform.prepare_render(ui, &state.window);
-                    // }
-
-                    // let view = frame
-                    //     .texture
-                    //     .create_view(&wgpu::TextureViewDescriptor::default());
-
-                    // let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    //     label: None,
-                    //     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    //         view: &view,
-                    //         resolve_target: None,
-                    //         ops: wgpu::Operations {
-                    //             load: wgpu::LoadOp::Clear(imgui.clear_color),
-                    //             store: wgpu::StoreOp::Store,
-                    //         },
-                    //     })],
-                    //     depth_stencil_attachment: None,
-                    //     timestamp_writes: None,
-                    //     occlusion_query_set: None,
-                    // });
-
-                    // imgui
-                    //     .renderer
-                    //     .render(
-                    //         imgui.context.render(),
-                    //         &state.queue,
-                    //         &state.device,
-                    //         &mut rpass,
-                    //     )
-                    //     .expect("Rendering failed");
-                    // drop(rpass);
-                    // state.queue.submit(Some(encoder.finish()));
-                    // frame.present();
                 }
                 _ => {}
             }
         }
-        // event => {
-        //     platform.handle_event(imgui.io_mut(), &window, &event);
-        // }
-        // _ => {}
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: ()) {
