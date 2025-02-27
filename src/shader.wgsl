@@ -67,7 +67,7 @@ var s_diffuse: sampler;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let scaled_tex_coords = vec2<f32>(
         fract(in.tex_coords.x), // Keep fractional part for tiling
-        fract(in.tex_coords.y)
+        1.0 - fract(in.tex_coords.y)
     );
     let final_tex_coords = (in.atlas_coords + scaled_tex_coords) / f32(32.0);
     return textureSample(t_diffuse, s_diffuse, final_tex_coords);

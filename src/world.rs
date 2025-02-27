@@ -1,6 +1,8 @@
+use derive_more::Display;
 use paste::paste;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    fmt::Display,
     hash::Hash,
     mem::size_of,
 };
@@ -43,6 +45,7 @@ pub struct Chunk {
     pub mesh: Option<Mesh>,
 }
 
+#[derive(Display, Debug)]
 enum Side {
     LEFT,
     RIGHT,
@@ -64,203 +67,174 @@ impl Side {
             Side::BACK => 5,
         }
     }
+
+    fn from_index(index: usize) -> Side {
+        match index {
+            0 => Side::LEFT,
+            1 => Side::RIGHT,
+            2 => Side::DOWN,
+            3 => Side::UP,
+            4 => Side::FRONT,
+            5 => Side::BACK,
+            _ => unreachable!(),
+        }
+    }
 }
 
-// Corner naming convention: V0..V7
-// Each is [x, y, z], from (0,0,0) up to (1,1,1).
-// 8 corners of a unit cube in [0,1]^3.
-const V0: [f32; 3] = [0.0, 0.0, 0.0]; // (x=0, y=0, z=0)
-const V1: [f32; 3] = [0.0, 1.0, 0.0]; // (x=0, y=1, z=0)
-const V2: [f32; 3] = [0.0, 0.0, 1.0]; // (x=0, y=0, z=1)
-const V3: [f32; 3] = [0.0, 1.0, 1.0]; // (x=0, y=1, z=1)
-const V4: [f32; 3] = [1.0, 0.0, 0.0]; // (x=1, y=0, z=0)
-const V5: [f32; 3] = [1.0, 1.0, 0.0]; // (x=1, y=1, z=0)
-const V6: [f32; 3] = [1.0, 0.0, 1.0]; // (x=1, y=0, z=1)
-const V7: [f32; 3] = [1.0, 1.0, 1.0]; // (x=1, y=1, z=1)
+const V0: [f32; 3] = [0.0, 0.0, 0.0];
+const V1: [f32; 3] = [0.0, 0.0, 1.0];
+const V2: [f32; 3] = [0.0, 1.0, 0.0];
+const V3: [f32; 3] = [0.0, 1.0, 1.0];
+const V4: [f32; 3] = [1.0, 0.0, 0.0];
+const V5: [f32; 3] = [1.0, 0.0, 1.0];
+const V6: [f32; 3] = [1.0, 1.0, 0.0];
+const V7: [f32; 3] = [1.0, 1.0, 1.0];
 
 const BOTTOM_LEFT: [f32; 2] = [0.0, 0.0];
 const TOP_LEFT: [f32; 2] = [0.0, 1.0];
 const BOTTOM_RIGHT: [f32; 2] = [1.0, 0.0];
 const TOP_RIGHT: [f32; 2] = [1.0, 1.0];
 
-/// Plane x=0, facing -X.
-/// CCW from the outside perspective looking from x < 0 back toward x=0.
 const LEFT_VERTICES: [ModelVertex; 4] = [
-    // We'll pick V1 -> V0 -> V2 -> V3 in that sequence:
-    //  V1 (0,1,0), V0 (0,0,0), V2 (0,0,1), V3 (0,1,1)
     ModelVertex {
         position: V1,
-        tex_coords: [0.0, 0.0],
+        tex_coords: BOTTOM_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V0,
-        tex_coords: [1.0, 0.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V2,
-        tex_coords: [1.0, 1.0],
+        tex_coords: BOTTOM_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
-        tex_coords: [0.0, 1.0],
+        tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V2,
+        tex_coords: TOP_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
 ];
 
-/// Plane x=1, facing +X, spanned by (y,z).
-/// This one was already correct in your code, but here it is for completeness:
 const RIGHT_VERTICES: [ModelVertex; 4] = [
-    // V4 (1,0,0), V5 (1,1,0), V7 (1,1,1), V6 (1,0,1)
     ModelVertex {
         position: V4,
-        tex_coords: [0.0, 0.0],
+        tex_coords: BOTTOM_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V5,
-        tex_coords: [1.0, 0.0],
+        tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: TOP_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
-        tex_coords: [1.0, 1.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V6,
-        tex_coords: [0.0, 1.0],
+        tex_coords: TOP_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
 ];
 
-/// Plane y=0, facing -Y, spanned by (x,z).
 const DOWN_VERTICES: [ModelVertex; 4] = [
-    // V0(0,0,0), V4(1,0,0), V6(1,0,1), V2(0,0,1)
+    ModelVertex {
+        position: V1,
+        tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V5,
+        tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
+    },
     ModelVertex {
         position: V0,
-        tex_coords: [0.0, 0.0],
+        tex_coords: TOP_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V4,
-        tex_coords: [1.0, 0.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V6,
-        tex_coords: [1.0, 1.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V2,
-        tex_coords: [0.0, 1.0],
+        tex_coords: TOP_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
 ];
 
-/// Plane y=1, facing +Y, spanned by (x,z).
 const UP_VERTICES: [ModelVertex; 4] = [
-    // V1(0,1,0), V3(0,1,1), V7(1,1,1), V5(1,1,0)
     ModelVertex {
-        position: V1,
-        tex_coords: [0.0, 0.0],
+        position: V2,
+        tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: BOTTOM_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
-        tex_coords: [0.0, 1.0],
+        tex_coords: TOP_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
-        tex_coords: [1.0, 1.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V5,
-        tex_coords: [1.0, 0.0],
+        tex_coords: TOP_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
 ];
-/// Plane z=0, facing -Z, spanned by (x,y).
-/// One valid CCW order: V1 -> V5 -> V4 -> V0
+
 const BACK_VERTICES: [ModelVertex; 4] = [
     ModelVertex {
-        position: V1,
-        tex_coords: [0.0, 0.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
         position: V5,
-        tex_coords: [1.0, 0.0],
+        tex_coords: BOTTOM_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
-        position: V4,
-        tex_coords: [1.0, 1.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V0,
-        tex_coords: [0.0, 1.0],
-        atlas_coords: [0.0, 0.0],
-    },
-];
-/// Plane z=1, facing +Z, spanned by (x,y).
-const FRONT_VERTICES: [ModelVertex; 4] = [
-    // V2(0,0,1), V6(1,0,1), V7(1,1,1), V3(0,1,1)
-    ModelVertex {
-        position: V2,
-        tex_coords: [0.0, 0.0],
-        atlas_coords: [0.0, 0.0],
-    },
-    ModelVertex {
-        position: V6,
-        tex_coords: [1.0, 0.0],
+        position: V1,
+        tex_coords: BOTTOM_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V7,
-        tex_coords: [1.0, 1.0],
+        tex_coords: TOP_LEFT,
         atlas_coords: [0.0, 0.0],
     },
     ModelVertex {
         position: V3,
-        tex_coords: [0.0, 1.0],
+        tex_coords: TOP_RIGHT,
         atlas_coords: [0.0, 0.0],
     },
 ];
 
-// Triangle indices for a quad in the order [0,1,2, 2,3,0]
-const FACE_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
-
-// const LEFT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-// const RIGHT_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
-// const DOWN_INDICES: [u32; 6] = [0, 2, 1, 1, 2, 3];
-// const UP_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-// const FRONT_INDICES: [u32; 6] = [0, 1, 2, 2, 1, 3];
-// const BACK_INDICES: [u32; 6] = [1, 0, 3, 3, 0, 2];
-
-const QUAD_VERTICES: [&[ModelVertex; 4]; 6] = [
-    &LEFT_VERTICES,  // i=0
-    &RIGHT_VERTICES, // i=1
-    &DOWN_VERTICES,  // i=2
-    &UP_VERTICES,    // i=3
-    &FRONT_VERTICES, // i=4
-    &BACK_VERTICES,  // i=5
+const FRONT_VERTICES: [ModelVertex; 4] = [
+    ModelVertex {
+        position: V0,
+        tex_coords: BOTTOM_LEFT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V4,
+        tex_coords: BOTTOM_RIGHT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V2,
+        tex_coords: TOP_LEFT,
+        atlas_coords: [0.0, 0.0],
+    },
+    ModelVertex {
+        position: V6,
+        tex_coords: TOP_RIGHT,
+        atlas_coords: [0.0, 0.0],
+    },
 ];
 
-const QUAD_INDICES: [&[u32; 6]; 6] = [
-    &FACE_INDICES, // 0: -X (left)
-    &FACE_INDICES, // 1: +X (right)
-    &FACE_INDICES, // 2: -Y (down)
-    &FACE_INDICES, // 3: +Y (up)
-    &FACE_INDICES, // 4: -Z (front)
-    &FACE_INDICES, // 5: +Z (back)
-];
+// const FACE_INDICES: [u32; 6] = [0, 3, 2, 0, 1, 3];
+const FACE_INDICES: [u32; 6] = [3, 1, 0, 2, 3, 0];
 
 /// Adds a face (4 vertices) as two triangles to the provided buffers.
 ///
@@ -336,6 +310,25 @@ impl Chunk {
                 }
             }
         }
+        // for x in 0usize..CHUNK_SIZE_X {
+        //     for z in 0usize..CHUNK_SIZE_Z {
+        //         let height_noise = perlin.get([
+        //             (x as f64 + 0.5 + 16.0 * self.chunk_x as f64) / 64.0,
+        //             (z as f64 + 0.5 + 16.0 * self.chunk_z as f64) / 64.0,
+        //         ]);
+        //         // println!("{}, {}, {}", height_noise, x, z);
+        //         let height = (sea_level + height_noise * height_variability) as usize;
+        //         for y in 0usize..CHUNK_SIZE_Y {
+        //             if x == 0 && y == 0 && z == 0 {
+        //                 self.set_block(x, y, z, Block::Stone);
+        //                 // blocks[x][y][z] = Block::Stone;
+        //             } else {
+        //                 self.set_block(x, y, z, Block::Air);
+        //                 // blocks[x][y][z] = Block::Air;
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     pub fn get_3d<T>(array: &[T], x: usize, y: usize, z: usize) -> T
@@ -394,25 +387,24 @@ impl Chunk {
                         start_coords[2] + v.position[2] * scale[2],
                     ];
 
-                    // For UV tiling, pick which 2 axes are actually varying on this face:
-                    let scaled_uv = match face_index {
-                        // 0 = LEFT, 1 = RIGHT => face is in X=0 or X=1 => vary (y,z)
-                        0 | 1 => [
-                            v.tex_coords[0] * scale[1], // tile along Y
-                            v.tex_coords[1] * scale[2], // tile along Z
-                        ],
-                        // 2 = DOWN, 3 = UP => face is in Y=0 or Y=1 => vary (x,z)
-                        2 | 3 => [
-                            v.tex_coords[0] * scale[0], // tile along X
-                            v.tex_coords[1] * scale[2], // tile along Z
-                        ],
-                        // 4 = BACK, 5 = FRONT => face is in Z=0 or Z=1 => vary (x,y)
-                        4 | 5 => [
-                            v.tex_coords[0] * scale[0], // tile along X
-                            v.tex_coords[1] * scale[1], // tile along Y
-                        ],
-                        _ => unreachable!(),
+                    let scaled_uv = match Side::from_index(face_index) {
+                        Side::LEFT => [v.tex_coords[0] * scale[2], v.tex_coords[1] * scale[1]],
+                        Side::RIGHT => [v.tex_coords[0] * scale[2], v.tex_coords[1] * scale[1]],
+                        Side::FRONT | Side::BACK => {
+                            [v.tex_coords[0] * scale[0], v.tex_coords[1] * scale[1]]
+                        }
+                        Side::DOWN | Side::UP => {
+                            [v.tex_coords[0] * scale[0], v.tex_coords[1] * scale[2]]
+                        }
                     };
+
+                    // printy!(
+                    //     Side::from_index(face_index),
+                    //     scaled_pos,
+                    //     scaled_uv,
+                    //     v.position,
+                    //     v.tex_coords
+                    // );
 
                     ModelVertex {
                         position: scaled_pos,
@@ -458,6 +450,9 @@ impl Chunk {
                 for (i, (direction_vertices, direction_indices)) in
                     face_tuples.into_iter().enumerate()
                 {
+                    // if i > 3 {
+                    //     continue;
+                    // }
                     let atlas_coords = atlas_coords.get(i).unwrap();
 
                     let starting_length = vertices.len();
@@ -1355,7 +1350,7 @@ impl World {
                 "old_chunk_position: {:?}, chunk_position: {:?}",
                 old_chunk_position, chunk_position
             );
-            let max_distance = 2 * self.render_distance * self.render_distance;
+            let max_distance = self.render_distance;
             let mut chunks_in_render_distance: HashSet<Point2<i32>> = (-self.render_distance
                 ..=self.render_distance)
                 .flat_map(|x| {

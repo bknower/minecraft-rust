@@ -301,7 +301,7 @@ impl State {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let camera = camera::Camera::new((0.0, 120.0, 2.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
+        let camera = camera::Camera::new((0.0, 100.0, 0.0), cgmath::Deg(0.0), cgmath::Deg(-50.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(100.0, 0.4);
