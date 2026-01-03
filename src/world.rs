@@ -250,12 +250,13 @@ impl Chunk {
 
     fn generate(&mut self, perlin: Perlin) {
         let sea_level = 40.0;
-        let height_variability = 20.0;
+        let height_variability = 60.0;
         for x in 0usize..CHUNK_SIZE_X {
             for z in 0usize..CHUNK_SIZE_Z {
+                let noise_scale = 64.0;
                 let height_noise = perlin.get([
-                    (x as f64 + 0.5 + 16.0 * self.chunk_x as f64) / 64.0,
-                    (z as f64 + 0.5 + 16.0 * self.chunk_z as f64) / 64.0,
+                    (x as f64 + 0.5 + noise_scale * self.chunk_x as f64) / noise_scale,
+                    (z as f64 + 0.5 + noise_scale * self.chunk_z as f64) / noise_scale,
                 ]);
                 // println!("{}, {}, {}", height_noise, x, z);
                 let height = (sea_level + height_noise * height_variability) as usize;
